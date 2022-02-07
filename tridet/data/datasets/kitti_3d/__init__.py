@@ -9,7 +9,7 @@ from tridet.data.datasets.kitti_3d.build import build_monocular_kitti3d_dataset,
 
 LOG = logging.getLogger(__name__)
 
-KITTI_ROOT = 'KITTI3D'
+KITTI_ROOT = 'kitti_3d'
 
 DATASET_DICTS_BUILDER = {
     # Monocular datasets
