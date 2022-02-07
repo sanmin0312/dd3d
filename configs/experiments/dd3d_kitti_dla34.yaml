@@ -8,7 +8,8 @@ defaults:
 
 MODEL:
   # from-coco, IODA-pretrained.
-  CKPT: https://tri-ml-public.s3.amazonaws.com/github/dd3d/pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
+#  CKPT: https://tri-ml-public.s3.amazonaws.com/github/dd3d/pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
+  CKPT: /dd3d/pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
 
 FE:
   BACKBONE:
