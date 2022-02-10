@@ -196,6 +196,12 @@ class KITTI3DDataset(Dataset):
             #TODO prev index 변수화 시키기
             prev_time = 2
             datum['prev_file_name'] = os.path.join(self.root_dir, kitti_3d_split, datum_prev_dir, f'{sample_id}_0{prev_time}.png')
+            whole_pose, raw_frame_index = self.get_mapping_index(sample_id)
+
+            pose = whole_pose.loc[raw_frame_index].values
+            pose_prev = whole_pose.loc[raw_frame_index - prev_time].values
+
+            datum.update({"ego_pose":[pose, pose_prev]})
 
         # We define extrinsics as the pose of sensor (S) from the Velodyne (V)
         _, pose_0V = self.calibration_table[(sample_id, 'velodyne')]
@@ -206,12 +212,46 @@ class KITTI3DDataset(Dataset):
         annotations, raw_kitti_annotations = self.get_annotations(sample_id, sensor_name)
         datum.update({'annotations': annotations})
 
-        datum['depth_file_name'] = os.path.join(self.root_dir, MV3D_SPLIT_KITTI_3D_REMAP[self._mv3d_split], "depth_gt", "{}.png".format(sample_id))
+        datum['depth_file_name'] = os.path.join(
+            self.root_dir, MV3D_SPLIT_KITTI_3D_REMAP[self._mv3d_split], "depth_gt", "{}.png".format(sample_id)
+        )
 
         if sensor_name == "camera_2":
             datum.update({"raw_kitti_annotations": raw_kitti_annotations})
 
         return {sensor_name: datum}
+
+    def get_mapping_index(self, sample_id):
+        train_rand = pd.read_csv(
+            os.path.join(
+                self.root_dir, "mapping", "train_rand.txt"
+            ),
+            sep=',',
+            header=None
+        ).values.tolist()
+
+        raw_index = train_rand[0][int(sample_id)]
+
+        train_mapping = pd.read_csv(
+            os.path.join(
+                self.root_dir, "mapping", "train_mapping.txt"
+            ),
+            sep='\n',
+            header=None
+        ).values.tolist()
+
+        raw_drive_name = train_mapping[raw_index - 1][0][11:-11]
+        raw_frame_index = int(train_mapping[raw_index - 1][0][-10:])
+
+        whole_pose = pd.read_csv(
+            os.path.join(
+                self.root_dir, "mapping", "pose", "{}".format(raw_drive_name), "pose.txt"
+            ),
+            sep=' ',
+            header=None
+
+        )
+        return whole_pose, raw_frame_index
 
     def get_annotations(self, sample_id, sensor_name):
         try:
