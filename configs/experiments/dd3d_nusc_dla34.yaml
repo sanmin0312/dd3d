@@ -71,4 +71,4 @@ DATALOADER:
     NUM_IMAGES_PER_GROUP: ${DATASETS.TEST.NUM_IMAGES_PER_SAMPLE}
 
 WANDB:
-  TAGS: [nusc-val, v2-99, bn]
+  TAGS: [nusc-val, dla34, bn]

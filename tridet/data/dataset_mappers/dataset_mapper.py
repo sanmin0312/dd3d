@@ -6,6 +6,7 @@ from typing import List, Union
 
 import numpy as np
 import torch
+import cv2
 
 from detectron2.config import configurable
 from detectron2.data import detection_utils as d2_utils
@@ -125,6 +126,16 @@ class DefaultDatasetMapper:
         # but not efficient on large generic data structures due to the use of pickle & mp.Queue.
         # Therefore it's important to use torch.Tensor.
         dataset_dict["image"] = torch.as_tensor(np.ascontiguousarray(image.transpose(2, 0, 1)))
+
+        if "prev_file_name" in dataset_dict:
+            image_prev = d2_utils.read_image(dataset_dict['prev_file_name'], format=self.image_format)
+            d2_utils.check_image_size(dataset_dict, image_prev)
+
+            #TODO transform 방법 찾기
+            image_prev = transforms.apply_image(image_prev)
+            image_prev_shape = image_prev.shape[:2]  # h, w
+            dataset_dict["image_prev"] = torch.as_tensor(np.ascontiguousarray(image_prev.transpose(2, 0, 1)))
+
         if semseg2d_gt is not None:
             dataset_dict["semseg2d"] = torch.as_tensor(semseg2d_gt.astype("long"))
 
@@ -138,7 +149,7 @@ class DefaultDatasetMapper:
         # See crop_transform.py, resize_transform.py, flip_transform.py for examples.
 
         if "depth_file_name" in dataset_dict:
-            depth_gt = np.load(dataset_dict.pop("depth_file_name"))['data']
+            depth_gt = cv2.imread(dataset_dict['depth_file_name'], 0)
             depth_gt = transforms.apply_depth(depth_gt)
             dataset_dict["depth"] = torch.as_tensor(depth_gt)
 
@@ -153,6 +164,7 @@ class DefaultDatasetMapper:
             dataset_dict["inv_intrinsics"] = torch.as_tensor(np.linalg.inv(intrinsics))
 
         if "pose" in dataset_dict:
+            #TODO image-image_prev pose mapping and conversion (euler to quaternion) 추가하기
             pose = Pose(wxyz=np.float32(dataset_dict["pose"]["wxyz"]), tvec=np.float32(dataset_dict["pose"]["tvec"]))
             dataset_dict["pose"] = pose
             # NOTE: no transforms affect global pose.
