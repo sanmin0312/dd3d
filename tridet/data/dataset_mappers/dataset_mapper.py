@@ -149,7 +149,8 @@ class DefaultDatasetMapper:
         # See crop_transform.py, resize_transform.py, flip_transform.py for examples.
 
         if "depth_file_name" in dataset_dict:
-            depth_gt = cv2.imread(dataset_dict['depth_file_name'], 0)
+            depth_gt = cv2.imread(dataset_dict['depth_file_name'], cv2.IMREAD_ANYDEPTH)
+            depth_gt = (depth_gt / 256.).astype(np.float32)
             depth_gt = transforms.apply_depth(depth_gt)
             dataset_dict["depth"] = torch.as_tensor(depth_gt)
 
