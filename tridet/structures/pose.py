@@ -145,7 +145,7 @@ class Pose:
         -------
         Pose
         """
-        return cls(wxyz=Quaternion(matrix=transformation_matrix[:3, :3]), tvec=np.float32(transformation_matrix[:3, 3]))
+        return cls(wxyz=Quaternion(matrix=transformation_matrix[:3, :3], rtol=1e-05, atol=1e-05), tvec=np.float32(transformation_matrix[:3, 3]))
 
     @classmethod
     def from_rotation_translation(cls, rotation_matrix, tvec):
