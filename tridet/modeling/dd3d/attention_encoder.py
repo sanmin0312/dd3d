@@ -9,7 +9,7 @@ import copy
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+    def __init__(self, d_model:int, max_len: int = 8000, dropout = 0.0):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -18,6 +18,7 @@ class PositionalEncoding(nn.Module):
         pe = torch.zeros(max_len, 1, d_model)
         pe[:, 0, 0::2] = torch.sin(position * div_term)
         pe[:, 0, 1::2] = torch.cos(position * div_term)
+        pe = pe.transpose(0,1)
         self.register_buffer('pe', pe)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -25,11 +26,9 @@ class PositionalEncoding(nn.Module):
         Args:
             x: Tensor, shape [seq_len, batch_size, embedding_dim]
         """
-        x = x + self.pe[:x.size(0)]
+        pe = self.pe[:, :x.size(1)]
+        x = x + pe.broadcast_to(x.shape)
         return self.dropout(x)
-
-
-
 
 
 class AttEncoder(nn.Module):
@@ -61,23 +60,35 @@ class AttEncoder(nn.Module):
 
         self.selfatt = _get_clones(selfatt, num_seflatt)
         self.crossatt = _get_clones(crossatt, num_crossatt)
+        self.PoseEnc = PositionalEncoding(embed_dim)
 
     def forward(self, feat, feat_prev):
+        """
+        Args:
+            feat: List of Tensors from each level of feature map, [batch_size, feature_size (W*H), embedding_size]
+            feat_prev: feat: List of Tensors from each level of feature map, [batch_size, feature_size (W*H), embedding_size]
+        """
 
         feat = [f.transpose(1,2) for f in feat]
         feat_prev = [f.transpose(1,2) for f in feat_prev]
 
-        for mod_self, mod_cross in zip(self.selfatt, self.crossatt):
-            for i, (mod_self_level, mod_cross_level, output, output_prev) in enumerate(zip(mod_self, mod_cross, feat, feat_prev)):
+        for i, (mod_self, mod_cross) in enumerate(zip(self.selfatt, self.crossatt)):
+            for j, (mod_self_level, mod_cross_level, output, output_prev) in enumerate(zip(mod_self, mod_cross, feat, feat_prev)):
+                if i == 0:
+                    output = torch.cat((output, torch.zeros(output.size(0), 1, output.size(2)).to(output.device)), dim=1)
 
+                output = self.PoseEnc(output)
                 # output = mod_self_level(output)
                 # output = mod_cross_level(output, output_prev, output_prev)
                 output = checkpoint.checkpoint(mod_self_level,output)
                 output = checkpoint.checkpoint(mod_cross_level,output, output_prev, output_prev)
 
-                feat[i] = output
+                feat[j] = output
 
-        return feat
+        feat_egopose = [f[:, -1] for f in feat]
+        feat = [f[:, :-1] for f in feat]
+
+        return feat, feat_egopose
 
 
 
