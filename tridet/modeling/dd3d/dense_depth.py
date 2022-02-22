@@ -171,3 +171,44 @@ class DD3DDenseDepth(nn.Module):
             return losses
         else:
             raise NotImplementedError()
+
+
+@META_ARCH_REGISTRY.register()
+class DD3DVIDEODenseDepth(nn.Module):
+    def __init__(self, cfg, input_shape):
+        super().__init__()
+        self.in_features = cfg.DD3D.IN_FEATURES
+        self.feature_locations_offset = cfg.DD3D.FEATURE_LOCATIONS_OFFSET
+        self.in_strides = [shape.stride for shape in input_shape]
+
+        self.fcos3d_head = DD3DDenseDepthHead(cfg, input_shape)
+
+        self.scale_depth_by_focal_lengths = cfg.DD3D.FCOS3D.SCALE_DEPTH_BY_FOCAL_LENGTHS
+        self.scale_depth_by_focal_lengths_factor = cfg.DD3D.FCOS3D.SCALE_DEPTH_BY_FOCAL_LENGTHS_FACTOR
+
+        self.register_buffer("pixel_mean", torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1))
+        self.register_buffer("pixel_std", torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1))
+
+    @property
+    def device(self):
+        return self.pixel_mean.device
+
+    def forward(self, x, intrinsics):
+
+        dense_depth = self.fcos3d_head(x)
+
+        inv_intrinsics = intrinsics.inverse() if intrinsics is not None else None
+
+        # Upsample.
+        dense_depth = [
+            aligned_bilinear(x, factor=stride, offset=self.feature_locations_offset).squeeze(1)
+            for x, stride in zip(dense_depth, self.in_strides)
+        ]
+
+        if self.scale_depth_by_focal_lengths:
+            assert inv_intrinsics is not None
+            pixel_size = torch.norm(torch.stack([inv_intrinsics[:, 0, 0], inv_intrinsics[:, 1, 1]], dim=-1), dim=-1)
+            scaled_pixel_size = (pixel_size * self.scale_depth_by_focal_lengths_factor).reshape(-1, 1, 1)
+            dense_depth = [x / scaled_pixel_size for x in dense_depth]
+
+        return dense_depth
