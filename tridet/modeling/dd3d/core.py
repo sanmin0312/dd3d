@@ -1,6 +1,7 @@
 # Copyright 2021 Toyota Research Institute.  All rights reserved.
 import torch
 from torch import nn
+import numpy as np
 
 from detectron2.modeling.meta_arch.build import META_ARCH_REGISTRY
 from detectron2.modeling.postprocessing import detector_postprocess as resize_instances
@@ -8,12 +9,17 @@ from detectron2.structures import Instances
 
 from tridet.modeling.dd3d.fcos2d import FCOS2DHead, FCOS2DInference, FCOS2DLoss
 from tridet.modeling.dd3d.fcos3d import FCOS3DHead, FCOS3DInference, FCOS3DLoss
-from tridet.modeling.dd3d.attention_encoder import AttEncoder
 from tridet.modeling.dd3d.postprocessing import nuscenes_sample_aggregate
 from tridet.modeling.dd3d.prepare_targets import DD3DTargetPreparer
 from tridet.modeling.feature_extractor import build_feature_extractor
 from tridet.structures.image_list import ImageList
 from tridet.utils.tensor2d import compute_features_locations as compute_locations_per_level
+
+from tridet.modeling.dd3d.attention_encoder import AttEncoder
+from tridet.modeling.dd3d.pose_estimation import PoseHead, PoseLoss
+from tridet.modeling.dd3d.dense_depth import DD3DVIDEODenseDepth
+from tridet.modeling.dd3d.dense_depth_loss import build_dense_depth_loss
+from tridet.structures.pose import Pose
 
 
 @META_ARCH_REGISTRY.register()
@@ -199,9 +205,14 @@ class DD3D_VIDEO(nn.Module):
         else:
             self.only_box2d = True
 
-        if cfg.MODEL.VIDEO:
+        if cfg.MODEL.VIDEO_ON:
             self.attencoder = AttEncoder(cfg, len(self.backbone_output_shape))
-            pass
+            self.pose_head = PoseHead(cfg, len(self.backbone_output_shape))
+            self.pose_loss = PoseLoss(cfg)
+
+        if cfg.MODEL.DEPTH_ON:
+            self.dense_depth_head = DD3DVIDEODenseDepth(cfg, self.backbone_output_shape)
+            self.depth_loss = build_dense_depth_loss(cfg)
 
         self.prepare_targets = DD3DTargetPreparer(cfg, self.backbone_output_shape)
 
@@ -229,7 +240,7 @@ class DD3D_VIDEO(nn.Module):
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [self.preprocess_image(x) for x in images]
 
-        #import previous images
+        # import previous images
         images_prev = [x["image_prev"].to(self.device) for x in batched_inputs]
         images_prev = [self.preprocess_image(x) for x in images_prev]
 
@@ -248,14 +259,26 @@ class DD3D_VIDEO(nn.Module):
                 gt_dense_depth, self.backbone.size_divisibility, intrinsics=intrinsics
             )
 
+        gt_ego_pose = None
+        if 'ego_pose' in batched_inputs[0]:
+            gt_ego_pose = [x["ego_pose"] for x in batched_inputs]
+
+            for i, ego_pose in enumerate(gt_ego_pose):
+                wxyz = ego_pose[1].rotation / ego_pose[0].rotation
+                tvec = ego_pose[1].tvec - ego_pose[0].tvec
+                ego_pose = Pose(wxyz=wxyz, tvec=tvec)
+                ego_pose = np.concatenate((ego_pose.rotation.normalised.elements, ego_pose.tvec), 0)
+                gt_ego_pose[i] = torch.tensor(ego_pose, dtype=torch.float32).to(self.device)
+            gt_ego_pose = torch.stack(gt_ego_pose)
+
         features_ = self.backbone(torch.cat((images.tensor,images_prev.tensor)))
+
+        #self-attention & temporal cross-attention
         feat_last_size = [features_[f].size(-1) for f in features_]
         features = [features_[f][:len(batched_inputs)].flatten(2) for f in self.in_features]
         features_prev = [features_[f][len(batched_inputs):].flatten(2) for f in self.in_features]
-
-        features = self.attencoder(features, features_prev)
-        features = [f.transpose(1, 2).reshape(f.size(0),f.size(2),-1,feat_last_size[i]) for i, f in enumerate(features)]
-
+        features, feat_egopose = self.attencoder(features, features_prev)
+        features = [f.transpose(1, 2).reshape(f.size(0), f.size(2), -1, feat_last_size[i]) for i, f in enumerate(features)]
 
         if "instances" in batched_inputs[0]:
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
@@ -267,6 +290,13 @@ class DD3D_VIDEO(nn.Module):
         if not self.only_box2d:
             box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf, dense_depth = self.fcos3d_head(features)
         inv_intrinsics = images.intrinsics.inverse() if images.intrinsics is not None else None
+
+        #dense depth estimation (sparse depth)
+        if self.dense_depth_head != None:
+            dense_depth = self.dense_depth_head(features, images.intrinsics)
+
+        if self.pose_head != None:
+            ego_pose = self.pose_head(feat_egopose)
 
         if self.training:
             assert gt_instances is not None
@@ -285,6 +315,21 @@ class DD3D_VIDEO(nn.Module):
                     fcos2d_info, training_targets
                 )
                 losses.update(fcos3d_loss)
+
+            # depth loss
+            if gt_dense_depth is not None:
+                for lvl, x in enumerate(dense_depth):
+                    loss_lvl = self.depth_loss(x, gt_dense_depth.tensor)["loss_dense_depth"]
+                    loss_lvl = loss_lvl / (np.sqrt(2) ** lvl)  # Is sqrt(2) good?
+                    losses.update({f"loss_dense_depth_lvl_{lvl}": loss_lvl})
+
+            #ego pose loss
+            if gt_ego_pose is not None:
+                for lvl, x in enumerate(feat_egopose):
+                    loss_ego_lvl = self.pose_loss(gt_ego_pose, x)["loss_ego_pose"]
+                    loss_ego_lvl = loss_ego_lvl / (np.sqrt(2) ** lvl)  # Is sqrt(2) good?
+                    losses.update({f"loss_ego_pose_lvl_{lvl}": loss_ego_lvl})
+
             return losses
         else:
             pred_instances, fcos2d_info = self.fcos2d_inference(
