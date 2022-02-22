@@ -165,10 +165,19 @@ class DefaultDatasetMapper:
             dataset_dict["inv_intrinsics"] = torch.as_tensor(np.linalg.inv(intrinsics))
 
         if "pose" in dataset_dict:
-            #TODO image-image_prev pose mapping and conversion (euler to quaternion) 추가하기
             pose = Pose(wxyz=np.float32(dataset_dict["pose"]["wxyz"]), tvec=np.float32(dataset_dict["pose"]["tvec"]))
             dataset_dict["pose"] = pose
             # NOTE: no transforms affect global pose.
+
+        if "ego_pose" in dataset_dict:
+            ego_poses = []
+            for ego_pose in dataset_dict["ego_pose"]:
+                ego_pose = np.concatenate((ego_pose, [0, 0, 0, 1]))
+                ego_pose = np.float32(ego_pose.reshape(4,4))
+                ego_pose = Pose.from_matrix(ego_pose)
+                ego_poses.append(ego_pose)
+
+            dataset_dict["ego_pose"] = ego_poses
 
         if "extrinsics" in dataset_dict:
             extrinsics = Pose(
