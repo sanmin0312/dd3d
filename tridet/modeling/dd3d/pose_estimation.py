@@ -24,7 +24,7 @@ class PoseHead(nn.Module):
     def forward(self, x):
 
         for i, (x_level, posenet) in enumerate(zip(x, self.posehead)):
-            x[i] = posenet(x_level)
+            x[i] = posenet(x_level).type(torch.float32)
 
         return x
 
