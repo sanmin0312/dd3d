@@ -199,9 +199,13 @@ class KITTI3DDataset(Dataset):
             whole_pose, raw_frame_index = self.get_mapping_index(sample_id)
 
             pose = whole_pose.loc[raw_frame_index].values
-            pose_prev = whole_pose.loc[raw_frame_index - prev_time].values
+            if raw_frame_index - prev_time >= 0:
+                pose_prev = whole_pose.loc[raw_frame_index - prev_time].values
+                datum.update({"ego_pose": [pose, pose_prev]})
 
-            datum.update({"ego_pose":[pose, pose_prev]})
+            else:
+                datum.update({"ego_pose": [pose, pose]})
+
 
         # We define extrinsics as the pose of sensor (S) from the Velodyne (V)
         _, pose_0V = self.calibration_table[(sample_id, 'velodyne')]
