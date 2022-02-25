@@ -9,9 +9,9 @@ import copy
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model:int, max_len: int = 8000, dropout = 0.0):
+    def __init__(self, d_model:int, max_len: int = 20000, dropout = 0.0):
         super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
+        # self.dropout = nn.Dropout(p=dropout)
 
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
@@ -28,7 +28,9 @@ class PositionalEncoding(nn.Module):
         """
         pe = self.pe[:, :x.size(1)]
         x = x + pe.broadcast_to(x.shape)
-        return self.dropout(x)
+        return x
+
+        # return self.dropout(x)
 
 
 class AttEncoder(nn.Module):
@@ -69,8 +71,8 @@ class AttEncoder(nn.Module):
             feat_prev: feat: List of Tensors from each level of feature map, [batch_size, feature_size (W*H), embedding_size]
         """
 
-        feat = [f.transpose(1,2) for f in feat]
-        feat_prev = [f.transpose(1,2) for f in feat_prev]
+        feat = [f.transpose(1, 2) for f in feat]
+        feat_prev = [f.transpose(1, 2) for f in feat_prev]
 
         for i, (mod_self, mod_cross) in enumerate(zip(self.selfatt, self.crossatt)):
             for j, (mod_self_level, mod_cross_level, output, output_prev) in enumerate(zip(mod_self, mod_cross, feat, feat_prev)):
@@ -129,7 +131,7 @@ class SelfAttentionEncoderLayer(nn.Module):
     """
     __constants__ = ['batch_first', 'norm_first']
 
-    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation=F.relu,
+    def __init__(self, d_model, nhead, dim_feedforward=64, dropout=0.0, activation=F.relu,
                  layer_norm_eps=1e-5, batch_first=True, norm_first=False,
                  device=None, dtype=None) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
@@ -138,14 +140,14 @@ class SelfAttentionEncoderLayer(nn.Module):
                                             **factory_kwargs)
         # Implementation of Feedforward model
         self.linear1 = nn.Linear(d_model, dim_feedforward, **factory_kwargs)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(dropout, inplace=True)
         self.linear2 = nn.Linear(dim_feedforward, d_model, **factory_kwargs)
 
         self.norm_first = norm_first
         self.norm1 = nn.LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
         self.norm2 = nn.LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
+        self.dropout1 = nn.Dropout(dropout, inplace=True)
+        self.dropout2 = nn.Dropout(dropout, inplace=True)
 
         # Legacy string support for activation function.
         if isinstance(activation, str):
@@ -235,8 +237,8 @@ class CrossAttentionEncoderLayer(nn.Module):
     """
     __constants__ = ['batch_first', 'norm_first']
 
-    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation=F.relu,
-                 layer_norm_eps=1e-5, batch_first=False, norm_first=False,
+    def __init__(self, d_model, nhead, dim_feedforward=64, dropout=0.0, activation=F.relu,
+                 layer_norm_eps=1e-5, batch_first=True, norm_first=False,
                  device=None, dtype=None) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super(CrossAttentionEncoderLayer, self).__init__()
@@ -244,14 +246,14 @@ class CrossAttentionEncoderLayer(nn.Module):
                                             **factory_kwargs)
         # Implementation of Feedforward model
         self.linear1 = nn.Linear(d_model, dim_feedforward, **factory_kwargs)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(dropout, inplace=True)
         self.linear2 = nn.Linear(dim_feedforward, d_model, **factory_kwargs)
 
         self.norm_first = norm_first
         self.norm1 = nn.LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
         self.norm2 = nn.LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
+        self.dropout1 = nn.Dropout(dropout, inplace=True)
+        self.dropout2 = nn.Dropout(dropout, inplace=True)
 
         # Legacy string support for activation function.
         if isinstance(activation, str):
