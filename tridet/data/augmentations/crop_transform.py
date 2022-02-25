@@ -28,10 +28,15 @@ def apply_imcrop_box3d(crop_tfm, box3d):  # pylint: disable=unused-argument
     return box3d
 
 
+def apply_imcrop_egopose(crop_tfm, egopose):  # pylint: disable=unused-argument
+    return egopose
+
+
 # (dennis.park) Augment ResizeTransform to handle intrinsics, depth
 CropTransform.register_type("intrinsics", apply_imcrop_intrinsics)
 CropTransform.register_type("depth", apply_imcrop_depth)
 CropTransform.register_type("box3d", apply_imcrop_box3d)
+CropTransform.register_type("egopose", apply_imcrop_egopose)
 
 
 class RandomCrop(_RandomCrop):

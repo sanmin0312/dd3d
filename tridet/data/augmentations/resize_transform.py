@@ -74,13 +74,16 @@ def resize_depth_preserve(resize_tfm, depth):
 def apply_imresize_box3d(resize_tfm, box3d):
     return box3d
 
+def apply_imresize_egopose(resize_tfm, egopose):
+    return egopose
 
 # (dennis.park) Augment ResizeTransform to handle intrinsics, depth
 ResizeTransform.register_type("intrinsics", apply_imresize_intrinsics)
 # ResizeTransform.register_type("depth", apply_imresize_depth)
 ResizeTransform.register_type("depth", resize_depth_preserve)
 ResizeTransform.register_type("box3d", apply_imresize_box3d)
-
+ResizeTransform.register_type("egopose", apply_imresize_egopose)
+#
 
 class ResizeShortestEdge(_ResizeShortestEdge):
     def get_transform(self, image):

@@ -7,6 +7,8 @@ from typing import List, Union
 import numpy as np
 import torch
 import cv2
+import os
+import copy
 
 from detectron2.config import configurable
 from detectron2.data import detection_utils as d2_utils
@@ -127,14 +129,15 @@ class DefaultDatasetMapper:
         # Therefore it's important to use torch.Tensor.
         dataset_dict["image"] = torch.as_tensor(np.ascontiguousarray(image.transpose(2, 0, 1)))
 
-        if "prev_file_name" in dataset_dict:
+        if "prev_file_name" in dataset_dict and os.path.isfile(dataset_dict["prev_file_name"]):
             image_prev = d2_utils.read_image(dataset_dict['prev_file_name'], format=self.image_format)
             d2_utils.check_image_size(dataset_dict, image_prev)
 
-            #TODO transform 방법 찾기
             image_prev = transforms.apply_image(image_prev)
-            image_prev_shape = image_prev.shape[:2]  # h, w
             dataset_dict["image_prev"] = torch.as_tensor(np.ascontiguousarray(image_prev.transpose(2, 0, 1)))
+
+        elif "prev_file_name" in dataset_dict and not os.path.isfile(dataset_dict["prev_file_name"]):
+            dataset_dict["image_prev"] = copy.deepcopy(dataset_dict["image"])
 
         if semseg2d_gt is not None:
             dataset_dict["semseg2d"] = torch.as_tensor(semseg2d_gt.astype("long"))
@@ -177,6 +180,11 @@ class DefaultDatasetMapper:
                 ego_pose = Pose.from_matrix(ego_pose)
                 ego_poses.append(ego_pose)
 
+            wxyz = ego_poses[1].rotation / ego_poses[0].rotation
+            tvec = ego_poses[1].tvec - ego_poses[0].tvec
+            ego_poses = Pose(wxyz=wxyz, tvec=tvec)
+            ego_poses = np.concatenate((ego_poses.rotation.normalised.elements, ego_poses.tvec), 0)
+            ego_poses = transforms.apply_egopose(ego_poses)
             dataset_dict["ego_pose"] = ego_poses
 
         if "extrinsics" in dataset_dict:
