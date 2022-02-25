@@ -59,13 +59,48 @@ def apply_vflip_box3d(vflip_tfm, box3d):  # pylint: disable=unused-argument
     raise NotImplementedError()
 
 
+def apply_hflip_egopose(hflip_tfm, egopose):  # pylint: disable=unused-argument
+    """Horizontally flip ego pose.
+
+    CAVEAT: This function makes assumption about the object symmetry wrt *y=0* plane.
+
+    new quaternion: [quat.z, -quat.y, -quat.x, quat.w]
+    https://stackoverflow.com/questions/32438252/efficient-way-to-apply-mirror-effect-on-quaternion-rotation
+
+    Parameters
+    ----------
+    hflip_tfm: HFlipTransform
+
+    egopose: np.array
+        7D representation of ego pose. quaternion (4) + location (3)
+
+    Returns
+    -------
+    np.array
+        7D representation of flipped 3D box.
+    """
+    quat, tvec = egopose[:4], egopose[4:7]
+
+    quat_new = np.float32([quat[3], -quat[2], -quat[1], quat[0]])
+    tvec_new = tvec.copy()
+    tvec_new[0] = -tvec_new[0]
+    return np.concatenate([quat_new, tvec_new])
+
+
+def apply_vflip_egopose(vflip_tfm, egopose):  # pylint: disable=unused-argument
+    # TODO
+    raise NotImplementedError()
+
+
 HFlipTransform.register_type("intrinsics", apply_hflip_intrinsics)
 HFlipTransform.register_type("depth", apply_hflip_depth)
 HFlipTransform.register_type("box3d", apply_hflip_box3d)
+HFlipTransform.register_type("egopose", apply_hflip_egopose)
 
 VFlipTransform.register_type("intrinsics", apply_vflip_intrinsics)
 VFlipTransform.register_type("depth", apply_vflip_depth)
 VFlipTransform.register_type("box3d", apply_vflip_box3d)
+VFlipTransform.register_type("egopose", apply_vflip_egopose)
 
 
 class RandomFlip(_RandomFlip):
