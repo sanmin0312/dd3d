@@ -35,6 +35,7 @@ from tridet.utils.wandb import flatten_dict, log_nested_dict
 from tridet.visualizers import get_dataloader_visualizer, get_predictions_visualizer
 
 LOG = logging.getLogger('tridet')
+os.environ["HYDRA_FULL_ERROR"] = '1'
 
 
 @hydra.main(config_path="../configs/", config_name="defaults")
