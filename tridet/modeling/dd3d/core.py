@@ -241,6 +241,8 @@ class DD3D_VIDEO(nn.Module):
         images = [self.preprocess_image(x) for x in images]
 
         # import previous images
+        # if 'image_prev' in batched_inputs[0]
+
         images_prev = [x["image_prev"].to(self.device) for x in batched_inputs]
         images_prev = [self.preprocess_image(x) for x in images_prev]
 
@@ -262,14 +264,7 @@ class DD3D_VIDEO(nn.Module):
         gt_ego_pose = None
         if 'ego_pose' in batched_inputs[0]:
             gt_ego_pose = [x["ego_pose"] for x in batched_inputs]
-
-            for i, ego_pose in enumerate(gt_ego_pose):
-                wxyz = ego_pose[1].rotation / ego_pose[0].rotation
-                tvec = ego_pose[1].tvec - ego_pose[0].tvec
-                ego_pose = Pose(wxyz=wxyz, tvec=tvec)
-                ego_pose = np.concatenate((ego_pose.rotation.normalised.elements, ego_pose.tvec), 0)
-                gt_ego_pose[i] = torch.tensor(ego_pose, dtype=torch.float32).to(self.device)
-            gt_ego_pose = torch.stack(gt_ego_pose)
+            gt_ego_pose = torch.tensor(gt_ego_pose, dtype=torch.float32).to(self.device)
 
         features_ = self.backbone(torch.cat((images.tensor,images_prev.tensor)))
 
@@ -325,7 +320,7 @@ class DD3D_VIDEO(nn.Module):
 
             #ego pose loss
             if gt_ego_pose is not None:
-                for lvl, x in enumerate(feat_egopose):
+                for lvl, x in enumerate(ego_pose):
                     loss_ego_lvl = self.pose_loss(gt_ego_pose, x)["loss_ego_pose"]
                     loss_ego_lvl = loss_ego_lvl / (np.sqrt(2) ** lvl)  # Is sqrt(2) good?
                     losses.update({f"loss_ego_pose_lvl_{lvl}": loss_ego_lvl})
