@@ -3,6 +3,9 @@
 import logging
 import os
 from collections import OrderedDict, defaultdict
+import sys
+this_dir = os.path.dirname(__file__)
+sys.path.insert(0, this_dir + '/..')
 
 import hydra
 import torch
@@ -36,7 +39,7 @@ from tridet.visualizers import get_dataloader_visualizer, get_predictions_visual
 
 LOG = logging.getLogger('tridet')
 os.environ["HYDRA_FULL_ERROR"] = '1'
-
+os.environ["CUDA_LAUNCH_BLOCKING"] = '1'
 
 @hydra.main(config_path="../configs/", config_name="defaults")
 def main(cfg):
@@ -121,6 +124,7 @@ def do_train(cfg, model):
 
         with amp.autocast(enabled=cfg.SOLVER.MIXED_PRECISION_ENABLED):
             loss_dict = model(data)
+
         # Account for accumulated gradients.
         loss_dict = {name: loss / accumulate_grad_batches for name, loss in loss_dict.items()}
         losses = sum(loss_dict.values())

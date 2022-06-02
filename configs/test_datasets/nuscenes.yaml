@@ -1,7 +1,8 @@
 defaults:
   - base_test_dataset
 
-NAME: nusc_val-subsample-8
+#NAME: nusc_val-subsample-8
+NAME: nusc_mini_val
 
 NUSC_SAMPLE_AGGREGATE_IN_INFERENCE: True
 NUM_IMAGES_PER_SAMPLE: 6

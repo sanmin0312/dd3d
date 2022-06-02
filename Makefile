@@ -78,7 +78,7 @@ docker-run:
 		${COMMAND}
 
 docker-run-mpi:
-	nvidia-docker run ${DOCKER_OPTS} -v $(PWD)/outputs:$(WORKSPACE)/workspace/outputs ${DOCKER_IMAGE} \
+	nvidia-docker run ${DOCKER_OPTS} -v $(PWD)/outputs:$(workspace)/workspace/dd3d/outputs ${DOCKER_IMAGE} \
 		bash -c "${MPI_CMD} ${COMMAND}"
 
 clean:

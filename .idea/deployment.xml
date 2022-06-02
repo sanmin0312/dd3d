@@ -1,15 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="user@143.248.224.24:22 password" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="vdc24" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
+    <option name="confirmBeforeUploading" value="false" />
     <serverData>
-      <paths name="VDC3">
+      <paths name="vdc23">
         <serverdata>
           <mappings>
             <mapping deploy="/home/user/data/SanminKim/dd3d" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
-      <paths name="user@143.248.224.24:22 password">
+      <paths name="vdc24">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/user/data/SanminKim/dd3d" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="vdc86">
         <serverdata>
           <mappings>
             <mapping deploy="/home/user/data/SanminKim/dd3d" local="$PROJECT_DIR$" web="/" />

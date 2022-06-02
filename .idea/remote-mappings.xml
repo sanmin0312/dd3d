@@ -10,6 +10,13 @@
             </list>
           </settings>
         </remote-mappings>
+        <remote-mappings server-id="python@sftp://user@143.248.224.24:22/home/user/anaconda3/envs/ksm-mmdet/bin/python3">
+          <settings>
+            <list>
+              <mapping local-root="$PROJECT_DIR$" remote-root="/home/user/data/SanminKim/dd3d" />
+            </list>
+          </settings>
+        </remote-mappings>
       </list>
     </list>
   </component>

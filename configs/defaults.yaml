@@ -32,7 +32,8 @@ SYNC_OUTPUT_DIR_S3:
   # How frequently (in training steps) to sync the working directory.
   PERIOD: 1000
 
-DATASET_ROOT: /dd3d/data/datasets
+DATASET_ROOT: /home/user/data/SanminKim/dd3d/data/datasets
+
 TMP_DIR: /tmp/
 
 hydra:

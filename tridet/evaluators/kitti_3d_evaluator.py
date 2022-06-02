@@ -24,6 +24,8 @@ from tridet.evaluators.rotate_iou import d3_box_overlap_kernel, rotate_iou_gpu_e
 from tridet.structures.boxes3d import GenericBoxes3D
 from tridet.structures.pose import Pose
 
+import matplotlib.pyplot as plt
+
 warnings.simplefilter('ignore', category=numba_err.NumbaDeprecationWarning)
 
 BBOX3D_PREDICTION_FILE = "bbox3d_predictions.json"
@@ -347,9 +349,11 @@ class KITTIEvaluationEngine():
 
         box3d_pr_curves = self.eval_metric(gt_annos, dt_annos, 'BOX3D_AP', overlap_thresholds)
         mAP_3d = self.get_mAP(box3d_pr_curves["precision"], box3d_pr_curves["recall"])
+        self.plot_PRcurve(box3d_pr_curves['precision'], box3d_pr_curves['recall'], '3D')
 
         bev_pr_curves = self.eval_metric(gt_annos, dt_annos, 'BEV_AP', overlap_thresholds)
         mAP_bev = self.get_mAP(bev_pr_curves["precision"], bev_pr_curves["recall"])
+        self.plot_PRcurve(box3d_pr_curves['precision'], box3d_pr_curves['recall'],'BEV')
 
         results = OrderedDict()
         for class_i, class_name in self.id_to_name.items():
@@ -363,6 +367,34 @@ class KITTIEvaluationEngine():
                     results['kitti_bev_r40/{}_{}_{}'.format(class_name, diff, thresh)] = \
                         mAP_bev[class_i, diff_i, thresh_i]
         return results
+
+
+    def plot_PRcurve(self, precision, recall, metric):
+        if not os.path.isdir('./PR_curve'):
+            os.mkdir('./PR_curve')
+        for class_idx, (p_perclass, r_perclass) in enumerate(zip(precision, recall)):
+            class_name = self.id_to_name[class_idx]
+            x = np.linspace(0, 1, 41)
+
+            for i, iou in enumerate(['0.5', '0.7']): #iou=[0.5, 0.7]
+                for diff in range(3):
+                    p, r = p_perclass[diff,i], r_perclass[diff ,i]
+                    r[r==0]=x[r==0]
+                    plt.plot(r, p)
+                plt.title('{} {} iou={}'.format(metric, class_name, iou))
+                plt.legend(['easy', 'mod', 'hard'])
+                plt.savefig(os.path.join(os.getcwd(), 'PR_curve', '{} {} iou={}.png'.format(metric, class_name, iou)), format='png')
+                plt.clf()
+
+
+
+
+
+
+
+
+
+
 
     def get_mAP(self, precision, recall):
         """ Get mAP from precision.

@@ -160,7 +160,7 @@ def worker_init_reset_seed(worker_id):
     seed_all_rng(np.random.randint(2**31) + worker_id)
 
 
-def collect_dataset_dicts(d2_dataset, num_workers_per_gpu=8, dummy_batch_size=32):
+def collect_dataset_dicts(d2_dataset, num_workers_per_gpu=8, dummy_batch_size=256):
     """Build D2 dataset (i.e. List[Dict]), given a dataset implementing recipe for building its item.
 
     This is useful when a __getitem__() takes much time / memory, so it's desirable to do one-time

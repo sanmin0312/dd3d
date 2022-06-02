@@ -56,11 +56,11 @@ MIXED_PRECISION_ENABLED: False
 
 # If any parameters might not be used in forward pass, turn on this to avoid error in DDP.
 # See "Internal Design" -> "Forward Pass": https://pytorch.org/docs/stable/notes/ddp.html
-DDP_FIND_UNUSED_PARAMETERS: False
+DDP_FIND_UNUSED_PARAMETERS: True
 
 # Run multiple batches of size IMS_PER_BATCH before doing a backward pass.
 # The effective batch size: IMS_PER_BATCH x ACCUMULATE_GRAD_BATCHES
-ACCUMULATE_GRAD_BATCHES: 1
+ACCUMULATE_GRAD_BATCHES: 2
 
 # If True, then SyncBN use only workers of the same machine to compute batch stats used in batchnorm.
 # If False, then SyncBN uses all workers across all machines.

@@ -13,11 +13,12 @@ LOG = logging.getLogger(__name__)
 NUSCENES_ROOT = "nuScenes"
 
 NUSC_DATASET_NAMES = [
-    "nusc_train",
-    "nusc_val",
+    # "nusc_train",
+    "nusc_train-subsample-8",
+    # "nusc_val",
     "nusc_val-subsample-8",
-    "nusc_trainval",
-    "nusc_test",
+    # "nusc_trainval",
+    # "nusc_test",
     "nusc_mini_train",
     "nusc_mini_val",
 ]
@@ -28,6 +29,7 @@ METADATA_BUILDER = {name: (register_nuscenes_metadata, {}) for name in DATASET_D
 
 
 def register_nuscenes_datasets(required_datasets, cfg):
+
     if cfg.DATASETS.TEST.NAME in ("nusc_train", "nusc_val", "nusc_trainval", "nusc_test") and \
         get_world_size() > 1:
         raise LOG.warning("The distributed evaluation does not work well with large test set for now. " \

@@ -157,13 +157,17 @@ class FCOS2DHead(nn.Module):
 
 
 class FCOS2DLoss():
-    def __init__(self, cfg):
+    def __init__(self, cfg, prediction=False):
         self.focal_loss_alpha = cfg.DD3D.FCOS2D.LOSS.ALPHA
         self.focal_loss_gamma = cfg.DD3D.FCOS2D.LOSS.GAMMA
 
         self.box2d_reg_loss_fn = IOULoss(cfg.DD3D.FCOS2D.LOSS.LOC_LOSS_TYPE)
 
         self.num_classes = cfg.DD3D.NUM_CLASSES
+
+        self.prediction = prediction
+        if self.prediction:
+            self.prediction_loss_weight = cfg.DD3D.FCOS2D.LOSS.WEIGHT_PRED
 
     def __call__(self, logits, box2d_reg, centerness, targets):
         labels = targets['labels']
@@ -233,7 +237,13 @@ class FCOS2DLoss():
             centerness_pred, centerness_targets, reduction="sum"
         ) / num_pos_avg
 
-        loss_dict = {"loss_cls": loss_cls, "loss_box2d_reg": loss_box2d_reg, "loss_centerness": loss_centerness}
+        if self.prediction:
+            loss_dict = {"loss_cls_pred": loss_cls * self.prediction_loss_weight,
+                         "loss_box2d_reg_pred": loss_box2d_reg * self.prediction_loss_weight,
+                         "loss_centerness_pred": loss_centerness * self.prediction_loss_weight}
+        else:
+            loss_dict = {"loss_cls": loss_cls, "loss_box2d_reg": loss_box2d_reg, "loss_centerness": loss_centerness}
+
         extra_info = {"loss_denom": loss_denom, "centerness_targets": centerness_targets}
 
         return loss_dict, extra_info
