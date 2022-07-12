@@ -1,15 +1,15 @@
 # @package _global_
 defaults:
   - /evaluators/nuscenes@EVALUATORS.NUSCENES
-  - override /meta_arch: dd3d
+  - override /meta_arch: dd3d_prediction
   - override /train_datasets@DATASETS.TRAIN: nuscenes
   - override /test_datasets@DATASETS.TEST: nuscenes
-  - override /feature_extractors@FE: dla34_fpn
+  - override /feature_extractors@FE: v2_99_fpn
 
 MODEL:
-  META_ARCHITECTURE: NuscenesDD3D
+  META_ARCHITECTURE: NuscenesDD3D_PREDICTION
   # from-coco, IODA-pretrained.
-#  CKPT: https://tri-ml-public.s3.amazonaws.com/github/dd3d/pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
+#  CKPT: https://tri-ml-public.s3.amazonaws.com/github/dd3d/pretrained/depth_pretrained_v99-3jlw0p36-20210423_010520-model_final-remapped.pth
   CKPT: ./pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
 
 FE:
@@ -39,22 +39,24 @@ DD3D:
 INPUT:
   RESIZE:
     # Nuscens images are (900, 1600)
-    MIN_SIZE_TRAIN: [640, 672, 704, 736, 768, 800, 832, 864, 896, 928, 960, 992, 1024, 1056, 1088, 1120, 1152]
+#    MIN_SIZE_TRAIN: [640, 672, 704, 736, 768, 800, 832, 864, 896, 928, 960, 992, 1024, 1056, 1088, 1120, 1152]
+    MIN_SIZE_TRAIN: [ 736]
+
     MAX_SIZE_TRAIN: 10000
     MIN_SIZE_TEST: 896
     MAX_SIZE_TEST: 100000
 
 SOLVER:
-  IMS_PER_BATCH: 1 # need at least 128 GPU mem (with fp16).
+  IMS_PER_BATCH: 1 # need at least 400 GPU mem (with fp16).
   BASE_LR: 0.002
   MAX_ITER: 120000
   STEPS: [100000, 115000]
   WARMUP_ITERS: 2000
-  MIXED_PRECISION_ENABLED: True
+  MIXED_PRECISION_ENABLED: False
   CHECKPOINT_PERIOD: 2000
 
 TEST:
-  IMS_PER_BATCH: 6 # 6 * 16 (must be multiple of 6 x #GPUs.)
+  IMS_PER_BATCH: 6 # 6 * 32 (must be multiple of 6 x #GPUs.)
   EVAL_PERIOD: 2000
   AUG:
     ENABLED: True
@@ -72,4 +74,14 @@ DATALOADER:
     NUM_IMAGES_PER_GROUP: ${DATASETS.TEST.NUM_IMAGES_PER_SAMPLE}
 
 WANDB:
-  TAGS: [nusc-val, dla34, bn]
+  TAGS: [nusc-val, v2-99, bn]
+
+DEFORMABLETRASFORMER:
+  D_MODEL: 256
+  N_HEAD: 4
+  NUM_ENC_LAYERS: 3
+  DIM_FFW: 1024
+  DROPOUT: 0.1
+  ACTIVATION: 'relu'
+  NUM_FEAT_LEVELS: 5
+  NUM_ENC_POINTS: 4

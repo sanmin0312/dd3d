@@ -1,7 +1,8 @@
 defaults:
   - base_train_dataset
 
-NAME: nusc_train
+#NAME: nusc_train-subsample-8
+NAME: nusc_mini_train
 
 CANONICAL_BOX3D_SIZES: [
     # (width, length, height)

@@ -9,6 +9,7 @@ from tridet.layers.normalization import ModuleListDial, Offset, Scale
 from tridet.modeling.dd3d.disentangled_box3d_loss import DisentangledBox3DLoss
 from tridet.structures.boxes3d import Boxes3D
 from tridet.utils.geometry import allocentric_to_egocentric, unproject_points2d
+from tridet.utils.tensor2d import aligned_bilinear
 
 EPS = 1e-7
 
@@ -53,7 +54,7 @@ def predictions_to_boxes3d(
 
 
 class FCOS3DHead(nn.Module):
-    def __init__(self, cfg, input_shape):
+    def __init__(self, cfg, input_shape, depth=False, video=True, prediction=False):
         super().__init__()
         self.num_classes = cfg.DD3D.NUM_CLASSES
         self.in_strides = [shape.stride for shape in input_shape]
@@ -64,8 +65,23 @@ class FCOS3DHead(nn.Module):
         self.proj_ctr_scale_init_factor = cfg.DD3D.FCOS3D.PROJ_CTR_SCALE_INIT_FACTOR
         self.use_per_level_predictors = cfg.DD3D.FCOS3D.PER_LEVEL_PREDICTORS
 
-        self.register_buffer("mean_depth_per_level", torch.Tensor(cfg.DD3D.FCOS3D.MEAN_DEPTH_PER_LEVEL))
-        self.register_buffer("std_depth_per_level", torch.Tensor(cfg.DD3D.FCOS3D.STD_DEPTH_PER_LEVEL))
+        self.depth_on = depth
+        self.video_on = video
+        self.prediction_on = prediction
+
+        if self.depth_on:
+            self.mean_depth_per_level = torch.FloatTensor(cfg.DD3D.FCOS3D.MEAN_DEPTH_PER_LEVEL)
+            self.std_depth_per_level = torch.FloatTensor(cfg.DD3D.FCOS3D.STD_DEPTH_PER_LEVEL)
+
+            self.scale_depth_by_focal_lengths = cfg.DD3D.FCOS3D.SCALE_DEPTH_BY_FOCAL_LENGTHS
+            self.scale_depth_by_focal_lengths_factor = cfg.DD3D.FCOS3D.SCALE_DEPTH_BY_FOCAL_LENGTHS_FACTOR
+
+            self.depth_scale_init_factor = cfg.DD3D.FCOS3D.DEPTH_SCALE_INIT_FACTOR
+            self.feature_locations_offset = cfg.DD3D.FEATURE_LOCATIONS_OFFSET
+
+        else:
+            self.register_buffer("mean_depth_per_level", torch.Tensor(cfg.DD3D.FCOS3D.MEAN_DEPTH_PER_LEVEL))
+            self.register_buffer("std_depth_per_level", torch.Tensor(cfg.DD3D.FCOS3D.STD_DEPTH_PER_LEVEL))
 
         in_channels = [s.channels for s in input_shape]
         assert len(set(in_channels)) == 1, "Each level must have the same channel!"
@@ -74,6 +90,9 @@ class FCOS3DHead(nn.Module):
         num_convs = cfg.DD3D.FCOS3D.NUM_CONVS
         use_deformable = cfg.DD3D.FCOS3D.USE_DEFORMABLE
         norm = cfg.DD3D.FCOS3D.NORM
+
+        if self.prediction_on:
+            norm = 'BN' # per GPU image is too small to use BN
 
         if use_deformable:
             raise ValueError("Not supported yet.")
@@ -125,6 +144,25 @@ class FCOS3DHead(nn.Module):
             for _ in range(num_levels)
         ])
 
+        if self.depth_on:
+            if self.prediction_on:
+                self.dense_depth = nn.ModuleList([
+                    Conv2d(in_channels, 1, kernel_size=3, stride=1, padding=1, bias=(not self.use_scale))
+                    for _ in range(self.num_levels)
+                ])
+
+            else:
+                self.dense_depth = nn.ModuleList([
+                    Conv2d(in_channels, 1, kernel_size=3, stride=1, padding=1, bias=(not self.use_scale))
+                    for _ in range(self.num_levels)
+                ])
+
+        if self.video_on:
+            self.pose = nn.ModuleList([
+                Conv2d(in_channels, 7, kernel_size=3, stride=1, padding=1, bias=(not self.use_scale))
+                for _ in range(self.num_levels)
+            ])
+
         if self.use_scale:
             self.scales_proj_ctr = nn.ModuleList([
                 Scale(init_value=stride * self.proj_ctr_scale_init_factor) for stride in self.in_strides
@@ -150,6 +188,12 @@ class FCOS3DHead(nn.Module):
 
         predictors = [self.box3d_quat, self.box3d_ctr, self.box3d_depth, self.box3d_size, self.box3d_conf]
 
+        if self.depth_on:
+            predictors.append(self.dense_depth)
+
+        if self.video_on:
+            predictors.append(self.pose)
+
         for modules in predictors:
             for l in modules.modules():
                 if isinstance(l, nn.Conv2d):
@@ -157,9 +201,14 @@ class FCOS3DHead(nn.Module):
                     if l.bias is not None:  # depth head may not have bias.
                         torch.nn.init.constant_(l.bias, 0)
 
-    def forward(self, x):
-        box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf = [], [], [], [], []
-        dense_depth = None
+    def forward(self, x, inv_intrinsics=None):
+        box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf, dense_depth, ego_pose = [], [], [], [], [], [], []
+        if not self.depth_on:
+            dense_depth = None
+
+        if not self.video_on:
+            ego_pose = None
+
         for l, features in enumerate(x):
             box3d_tower_out = self.box3d_tower(features)
 
@@ -172,6 +221,12 @@ class FCOS3DHead(nn.Module):
             size3d = self.box3d_size[_l](box3d_tower_out)
             conf3d = self.box3d_conf[_l](box3d_tower_out)
 
+            if self.depth_on:
+                dense_depth_lvl = self.dense_depth[_l](box3d_tower_out)
+
+            if self.video_on:
+                pose = self.pose[_l](box3d_tower_out)
+
             if self.use_scale:
                 # TODO: to optimize the runtime, apply this scaling in inference (and loss compute) only on FG pixels?
                 proj_ctr = self.scales_proj_ctr[l](proj_ctr)
@@ -179,17 +234,42 @@ class FCOS3DHead(nn.Module):
                 conf3d = self.scales_conf[l](conf3d)
                 depth = self.offsets_depth[l](self.scales_depth[l](depth))
 
+                if self.depth_on:
+                    dense_depth_lvl = self.offsets_depth[l](self.scales_depth[l](dense_depth_lvl))
+
             box3d_quat.append(quat)
             box3d_ctr.append(proj_ctr)
             box3d_depth.append(depth)
             box3d_size.append(size3d)
             box3d_conf.append(conf3d)
 
-        return box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf, dense_depth
+            if self.depth_on:
+                dense_depth.append(dense_depth_lvl)
+
+            if self.video_on:
+                ego_pose.append(pose.mean(dim=(2, 3)))
+
+        if self.depth_on:
+
+            # Upsample.
+            dense_depth = [
+                aligned_bilinear(x, factor=stride, offset=self.feature_locations_offset).squeeze(1)
+                for x, stride in zip(dense_depth, self.in_strides)
+            ]
+
+            if self.scale_depth_by_focal_lengths:
+                assert inv_intrinsics is not None
+                pixel_size = torch.norm(torch.stack([inv_intrinsics[:, 0, 0], inv_intrinsics[:, 1, 1]], dim=-1), dim=-1)
+                scaled_pixel_size = (pixel_size * self.scale_depth_by_focal_lengths_factor).reshape(-1, 1, 1)
+                dense_depth = [x / scaled_pixel_size for x in dense_depth]
+
+            # dense_depth = [x.clamp(max=80.0) for x in dense_depth]
+
+        return box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf, dense_depth, ego_pose
 
 
 class FCOS3DLoss():
-    def __init__(self, cfg):
+    def __init__(self, cfg, prediction=False):
         self.canon_box_sizes = cfg.DD3D.FCOS3D.CANONICAL_BOX3D_SIZES
         self.min_depth = cfg.DD3D.FCOS3D.MIN_DEPTH
         self.max_depth = cfg.DD3D.FCOS3D.MAX_DEPTH
@@ -205,6 +285,11 @@ class FCOS3DLoss():
 
         self.num_classes = cfg.DD3D.NUM_CLASSES
         self.class_agnostic = cfg.DD3D.FCOS3D.CLASS_AGNOSTIC_BOX3D
+
+        self.prediction_on = prediction
+        if self.prediction_on:
+            self.prediction_loss_weight = cfg.DD3D.FCOS3D.LOSS.PREDICTION_WEIGHT
+
 
     def __call__(
         self, box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf, dense_depth, inv_intrinsics, fcos2d_info,
@@ -222,6 +307,15 @@ class FCOS3DLoss():
                 "loss_box3d_size": box3d_size.sum() * 0.,
                 "loss_conf3d": box3d_conf.sum() * 0.
             }
+
+            if self.prediction_on:
+                losses = {
+                    "loss_box3d_quat_pred": box3d_quat.sum() * 0.,
+                    "loss_box3d_proj_ctr_pred": box3d_ctr.sum() * 0.,
+                    "loss_box3d_depth_pred": box3d_depth.sum() * 0.,
+                    "loss_box3d_size_pred": box3d_size.sum() * 0.,
+                    "loss_conf3d_pred": box3d_conf.sum() * 0.
+                }
             return losses
 
         if len(labels) != len(box3d_targets):
@@ -288,13 +382,21 @@ class FCOS3DLoss():
         loss_denom = fcos2d_info["loss_denom"]
         losses_box3d, box3d_l1_error = self.box3d_reg_loss_fn(box3d_pred, box3d_targets, locations, centerness_targets)
 
-        losses_box3d = {k: self.box3d_loss_weight * v / loss_denom for k, v in losses_box3d.items()}
+        if self.prediction_on:
+            losses_box3d = {'{}_pred'.format(k): self.prediction_loss_weight * self.box3d_loss_weight * v / loss_denom for k, v in losses_box3d.items()}
+        else:
+            losses_box3d = {k: self.box3d_loss_weight * v / loss_denom for k, v in losses_box3d.items()}
 
         conf_3d_targets = torch.exp(-1. / self.conf_3d_temperature * box3d_l1_error)
         loss_conf3d = F.binary_cross_entropy_with_logits(box3d_conf_pred, conf_3d_targets, reduction='none')
-        loss_conf3d = self.conf3d_loss_weight * (loss_conf3d * centerness_targets).sum() / loss_denom
 
-        losses = {"loss_conf3d": loss_conf3d, **losses_box3d}
+        if self.prediction_on:
+            loss_conf3d = self.prediction_loss_weight * self.conf3d_loss_weight * (loss_conf3d * centerness_targets).sum() / loss_denom
+            losses = {"loss_conf3d_prev": loss_conf3d, **losses_box3d}
+
+        else:
+            loss_conf3d = self.conf3d_loss_weight * (loss_conf3d * centerness_targets).sum() / loss_denom
+            losses = {"loss_conf3d": loss_conf3d, **losses_box3d}
 
         return losses
 

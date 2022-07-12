@@ -19,10 +19,15 @@ def apply_no_op_box3d(blend_tfm, box3d):
     return box3d
 
 
+def apply_no_op_egopose(blend_tfm, egopose):
+    return egopose
+
+
 # (dennis.park) Augment ResizeTransform to handle intrinsics, depth
 BlendTransform.register_type("intrinsics", apply_no_op_intrinsics)
 BlendTransform.register_type("depth", apply_no_op_depth)
 BlendTransform.register_type("box3d", apply_no_op_box3d)
+BlendTransform.register_type("egopose", apply_no_op_egopose)
 
 
 class RandomContrast(_RandomContrast):

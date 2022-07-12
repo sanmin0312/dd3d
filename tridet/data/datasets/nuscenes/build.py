@@ -24,8 +24,10 @@ from tridet.utils.visualization import float_to_uint8_color
 #     - mini_train/mini_val: Train and val splits of the mini subset used for visualization and debugging (8/2 scenes).
 #     - train_detect/train_track: Two halves of the train split used for separating the training sets of detector and
 #         tracker if required
+
 DATASET_NAME_TO_VERSION = {
     "nusc_train": "v1.0-trainval",
+    "nusc_train-subsample-8": "v1.0-trainval",
     "nusc_val": "v1.0-trainval",
     "nusc_val-subsample-8": "v1.0-trainval",
     "nusc_trainval": "v1.0-trainval",
@@ -136,6 +138,8 @@ class NuscenesDataset(Dataset):
         scenes_in_splits = create_splits_scenes()
         if name == "nusc_trainval":
             scenes = scenes_in_splits["train"] + scenes_in_splits["val"]
+        elif name == "nusc_train-subsample-8":
+            scenes = scenes_in_splits["train"]
         elif name == "nusc_val-subsample-8":
             scenes = scenes_in_splits["val"]
         else:
@@ -296,6 +300,19 @@ class NuscenesDataset(Dataset):
             sample_id=sample_id,
             sample_token=sample_token
         )
+
+        # t-1 image
+        if sample_idx > 1:
+            t1_token = self.nusc.get('sample', datum['sample_token'])['prev']
+
+            t1_sample = self.nusc.get('sample', t1_token)['data'][datum_name]
+            filename, _, _ = self.nusc.get_sample_data(t1_sample)
+            d2_dict['t1_file_name'] = filename
+
+            t2_token = self.nusc.get('sample', t1_token)['prev']
+            t2_sample = self.nusc.get('sample', t2_token)['data'][datum_name]
+            filename, _, _ = self.nusc.get_sample_data(t2_sample)
+            d2_dict['t2_file_name'] = filename
 
         # Intrinsics
         d2_dict['intrinsics'] = list(K.flatten())

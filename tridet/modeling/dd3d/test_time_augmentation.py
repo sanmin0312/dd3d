@@ -15,10 +15,10 @@ from detectron2.structures import Boxes, Instances
 from detectron2.utils.comm import get_world_size
 
 from tridet.layers import bev_nms
-from tridet.modeling.dd3d.core import DD3D
+from tridet.modeling.dd3d.core import DD3D, DD3D_VIDEO_PREDICTION4
 from tridet.structures.boxes3d import Boxes3D
 
-__all__ = ["DatasetMapperTTA", "DD3DWithTTA"]
+__all__ = ["DatasetMapperTTA", "DD3DWithTTA", "DD3D_VIDEOWithTTA"]
 
 
 class DatasetMapperTTA:
@@ -48,6 +48,16 @@ class DatasetMapperTTA:
                 containing the transforms that are used to generate this image.
         """
         numpy_image = dataset_dict["image"].permute(1, 2, 0).numpy()
+
+        if "image_prev" in dataset_dict:
+            numpy_image_prev = dataset_dict["image_prev"].permute(1, 2, 0).numpy()
+
+        if "image_t1" in dataset_dict:
+            numpy_image_t1 = dataset_dict["image_t1"].permute(1, 2, 0).numpy()
+
+        if "image_t2" in dataset_dict:
+            numpy_image_t2 = dataset_dict["image_t2"].permute(1, 2, 0).numpy()
+
         shape = numpy_image.shape
         orig_shape = (dataset_dict["height"], dataset_dict["width"])
         if shape[:2] != orig_shape:
@@ -74,6 +84,21 @@ class DatasetMapperTTA:
             dic = copy.deepcopy(dataset_dict)
             dic["transforms"] = pre_tfm + tfms
             dic["image"] = torch_image
+
+            if "image_t1" in dic:
+                new_image_t1, _ = apply_augmentations(aug, np.copy(numpy_image_t1))
+                torch_image_t1 = torch.from_numpy(np.ascontiguousarray(new_image_t1.transpose(2, 0, 1)))
+                dic["image_t1"] = torch_image_t1
+
+            if "image_t2" in dic:
+                new_image_t2, _ = apply_augmentations(aug, np.copy(numpy_image_t2))
+                torch_image_t2 = torch.from_numpy(np.ascontiguousarray(new_image_t2.transpose(2, 0, 1)))
+                dic["image_t2"] = torch_image_t2
+
+            if "image_prev" in dic:
+                new_image_prev, _ = apply_augmentations(aug, np.copy(numpy_image_prev))
+                torch_image_prev = torch.from_numpy(np.ascontiguousarray(new_image_prev.transpose(2, 0, 1)))
+                dic["image_prev"] = torch_image_prev
 
             if "intrinsics" in dic:
                 intrinsics = dic['intrinsics'].cpu().numpy().astype(np.float32)
@@ -104,6 +129,160 @@ class DD3DWithTTA(nn.Module):
         if isinstance(model, DistributedDataParallel):
             model = model.module
         assert isinstance(model, DD3D), "DD3DwithTTA only supports on DD3D. Got a model of type {}".format(type(model))
+        assert not model.postprocess_in_inference, "To use test-time augmentation, `postprocess_in_inference` must be False."
+        self.cfg = cfg.copy()
+
+        self.model = model
+        self.nms_thresh = cfg.DD3D.FCOS2D.INFERENCE.NMS_THRESH
+
+        if tta_mapper is None:
+            tta_mapper = DatasetMapperTTA(cfg)
+        self.tta_mapper = tta_mapper
+        self.batch_size = cfg.TEST.IMS_PER_BATCH // get_world_size()
+
+    def _batch_inference(self, batched_inputs):
+        """
+        Execute inference on a list of inputs,
+        using batch size = self.batch_size, instead of the length of the list.
+
+        Inputs & outputs have the same format as :meth:`GeneralizedRCNN.inference`
+        """
+        outputs = []
+        inputs = []
+        for idx, input in enumerate(batched_inputs):
+            inputs.append(input)
+            if len(inputs) == self.batch_size or idx == len(batched_inputs) - 1:
+                # This runs NMS per each augmented image.
+                outputs.extend([res['instances'] for res in self.model(inputs)])
+                inputs = []
+        return outputs
+
+    def __call__(self, batched_inputs):
+        """
+        Same input/output format as :meth:`DD3D`
+        """
+        def _maybe_read_image(dataset_dict):
+            ret = copy.copy(dataset_dict)
+            if "image" not in ret:
+                image = read_image(ret.pop("file_name"), self.tta_mapper.image_format)
+                image = torch.from_numpy(np.ascontiguousarray(image.transpose(2, 0, 1)))  # CHW
+                ret["image"] = image
+            if "height" not in ret and "width" not in ret:
+                ret["height"] = image.shape[1]
+                ret["width"] = image.shape[2]
+            return ret
+
+        return [self._inference_one_image(_maybe_read_image(x)) for x in batched_inputs]
+
+    def _inference_one_image(self, x):
+        """
+        Args:
+            x (dict): one dataset dict with "image" field being a CHW tensor
+
+        Returns:
+            dict: one output dict
+        """
+        orig_shape = (x["height"], x["width"])
+        augmented_inputs, tfms = self._get_augmented_inputs(x)
+        merged_instances = self._get_augmented_instances(augmented_inputs, tfms, orig_shape)
+        if len(merged_instances) > 0:
+            if self.model.do_nms:
+                # Multiclass NMS.
+                keep = batched_nms(
+                    merged_instances.pred_boxes.tensor, merged_instances.scores_3d, merged_instances.pred_classes,
+                    self.nms_thresh
+                )
+                merged_instances = merged_instances[keep]
+
+            if not self.model.only_box2d and self.model.do_bev_nms:
+                # Bird-eye-view NMS.
+                keep = bev_nms(
+                    merged_instances.pred_boxes3d,
+                    merged_instances.scores_3d,
+                    self.model.bev_nms_iou_thresh,
+                    class_idxs=merged_instances.pred_classes,
+                    class_agnostic=False
+                )
+                merged_instances = merged_instances[keep]
+
+        return {"instances": merged_instances}
+
+    def _get_augmented_inputs(self, input):
+        augmented_inputs = self.tta_mapper(input)
+        tfms = [x.pop("transforms") for x in augmented_inputs]
+        return augmented_inputs, tfms
+
+    def _get_augmented_instances(self, augmented_inputs, tfms, orig_shape):
+        # 1: forward with all augmented images
+        outputs = self._batch_inference(augmented_inputs)
+        # 2: union the results
+        all_boxes = []
+        all_boxes3d = []
+        all_scores = []
+        all_scores_3d = []
+        all_classes = []
+        for input, output, tfm in zip(augmented_inputs, outputs, tfms):
+            # Need to invert the transforms on boxes, to obtain results on original image
+            inv_tfm = tfm.inverse()
+
+            # 2D boxes
+            pred_boxes = output.pred_boxes.tensor
+            orig_pred_boxes = inv_tfm.apply_box(pred_boxes.cpu().numpy())
+            orig_pred_boxes = torch.from_numpy(orig_pred_boxes).to(pred_boxes.device)
+            all_boxes.append(Boxes(orig_pred_boxes))
+
+            # 3D boxes
+            pred_boxes_3d = output.pred_boxes3d
+            vectorized_boxes_3d = pred_boxes_3d.vectorize().cpu().numpy()
+            orig_vec_pred_boxes_3d = [inv_tfm.apply_box3d(box3d_as_vec) for box3d_as_vec in vectorized_boxes_3d]
+
+            # intrinsics
+            orig_intrinsics = inv_tfm.apply_intrinsics(input['intrinsics'].cpu().numpy())
+            orig_pred_boxes_3d = Boxes3D.from_vectors(
+                orig_vec_pred_boxes_3d, orig_intrinsics, device=pred_boxes_3d.device
+            )
+            all_boxes3d.append(orig_pred_boxes_3d)
+
+            all_scores.extend(output.scores)
+            all_scores_3d.extend(output.scores_3d)
+            all_classes.extend(output.pred_classes)
+
+        all_boxes = Boxes.cat(all_boxes)
+        all_boxes3d = Boxes3D.cat(all_boxes3d)
+
+        all_scores = torch.cat([x.scores for x in outputs])
+        all_scores_3d = torch.cat([x.scores_3d for x in outputs])
+        all_classes = torch.cat([x.pred_classes for x in outputs])
+
+        return Instances(
+            image_size=orig_shape,
+            pred_boxes=all_boxes,
+            pred_boxes3d=all_boxes3d,
+            pred_classes=all_classes,
+            scores=all_scores,
+            scores_3d=all_scores_3d,
+        )
+
+
+class DD3D_VIDEOWithTTA(nn.Module):
+    """
+    A GeneralizedRCNN with test-time augmentation enabled.
+    Its :meth:`__call__` method has the same interface as :meth:`GeneralizedRCNN.forward`.
+    """
+    def __init__(self, cfg, model, tta_mapper=None):
+        """
+        Args:
+            cfg (CfgNode):
+            model (GeneralizedRCNN): a GeneralizedRCNN to apply TTA on.
+            tta_mapper (callable): takes a dataset dict and returns a list of
+                augmented versions of the dataset dict. Defaults to
+                `DatasetMapperTTA(cfg)`.
+            batch_size (int): batch the augmented images into this batch size for inference.
+        """
+        super().__init__()
+        if isinstance(model, DistributedDataParallel):
+            model = model.module
+        assert isinstance(model, DD3D_VIDEO_PREDICTION7), "DD3DwithTTA only supports on DD3D. Got a model of type {}".format(type(model))
         assert not model.postprocess_in_inference, "To use test-time augmentation, `postprocess_in_inference` must be False."
         self.cfg = cfg.copy()
 

@@ -4,7 +4,7 @@ defaults:
 USE_TEST: False
 
 MODEL:
-  CHECKPOINT: ''
+  CHECKPOINT: /dd3d/pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
 
 WANDB:
   ENABLED: False

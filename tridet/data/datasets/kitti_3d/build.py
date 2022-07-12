@@ -3,6 +3,7 @@ import functools
 import itertools
 import logging
 import os
+import random
 from collections import OrderedDict
 from multiprocessing import Pool, cpu_count
 
@@ -51,7 +52,7 @@ MV3D_SPLIT_KITTI_3D_REMAP = {
 
 
 class KITTI3DDataset(Dataset):
-    def __init__(self, root_dir, mv3d_split, class_names, sensors, box2d_from_box3d=False, max_num_items=None):
+    def __init__(self, root_dir, mv3d_split, class_names, sensors, prev=True, prediction=True, box2d_from_box3d=False, max_num_items=None):
         self.root_dir = root_dir
         assert mv3d_split in ["train", "val", "trainval", "test"]
         with open(os.path.join(self.root_dir, "mv3d_kitti_splits", "{}.txt".format(mv3d_split))) as _f:
@@ -68,6 +69,10 @@ class KITTI3DDataset(Dataset):
         if sensors != ('camera_2', ) and not box2d_from_box3d:
             LOG.warning(f"Overwriting 'box2d_from_box3d' from 'False' to 'True' (sensors = {', '.join(sensors)}).")
             box2d_from_box3d = True
+
+        self._prev = prev
+        self._prediction = prediction
+
         self._box2d_from_box3d = box2d_from_box3d
 
         self.calibration_table = self._parse_calibration_files()
@@ -163,10 +168,10 @@ class KITTI3DDataset(Dataset):
         sample_id = self._split[idx]
         sample = OrderedDict()
         for sensor_name in self._sensors:
-            sample.update(self._get_sample_data(sample_id, sensor_name))
+            sample.update(self._get_sample_data(sample_id, sensor_name, self._prev, self._prediction))
         return sample
 
-    def _get_sample_data(self, sample_id, sensor_name):
+    def _get_sample_data(self, sample_id, sensor_name, prev, prediction):
         # Get pose of the sensor (S) from vehicle (V) frame (pose_VS).
         # For KITTI 3D, vehicle frame is equivalent to world frame W, so pose_WS = pose_VS
         intrinsics, pose_0S = self.calibration_table[(sample_id, sensor_name)]
@@ -188,6 +193,56 @@ class KITTI3DDataset(Dataset):
         else:
             raise ValueError(f"Invalid sensor name: {sensor_name}")
 
+        if prev:
+            datum_prev_dir = "prev_2"
+
+            timestep = random.randint(1,3)
+            datum['prev_file_name'] = os.path.join(self.root_dir, kitti_3d_split, datum_prev_dir, f'{sample_id}_0{timestep}.png')
+            whole_pose, raw_frame_index = self.get_mapping_index(sample_id)
+
+            pose = whole_pose.loc[raw_frame_index].values
+            if raw_frame_index - timestep >= 0:
+                pose_prev = whole_pose.loc[raw_frame_index - timestep].values
+                datum.update({"ego_pose": [pose, pose_prev]})
+
+            else:
+                datum.update({"ego_pose": [pose, pose]})
+
+            datum['current_depth_file_name'] = os.path.join(
+                self.root_dir, MV3D_SPLIT_KITTI_3D_REMAP[self._mv3d_split], "depth_gt", "{}.png".format(sample_id)
+            )
+
+            datum['past_depth_file_name'] = os.path.join(
+                self.root_dir, MV3D_SPLIT_KITTI_3D_REMAP[self._mv3d_split], "depth_past",
+                "{}_0{}.png".format(sample_id, timestep)
+            )
+
+            datum['future_depth_file_name'] = os.path.join(
+                self.root_dir, MV3D_SPLIT_KITTI_3D_REMAP[self._mv3d_split], "depth_fut",
+                "{}_0{}.png".format(sample_id, timestep)
+            )
+
+        if prediction:
+            datum_prev_dir = "prev_2"
+
+            datum['t1_file_name'] = os.path.join(self.root_dir, kitti_3d_split, datum_prev_dir, f'{sample_id}_01.png')
+            datum['t2_file_name'] = os.path.join(self.root_dir, kitti_3d_split, datum_prev_dir, f'{sample_id}_02.png')
+
+            whole_pose, raw_frame_index = self.get_mapping_index(sample_id)
+
+            pose = whole_pose.loc[raw_frame_index].values
+            if raw_frame_index - 2 >= 0:
+                pose_t1 = whole_pose.loc[raw_frame_index - 1].values
+                pose_t2 = whole_pose.loc[raw_frame_index - 2].values
+
+                datum.update({"ego_pose": [pose_t1, pose_t2]})
+
+            else:
+                datum.update({"ego_pose": [pose, pose]})
+
+
+
+
         # We define extrinsics as the pose of sensor (S) from the Velodyne (V)
         _, pose_0V = self.calibration_table[(sample_id, 'velodyne')]
         _, pose_0S = self.calibration_table[(sample_id, sensor_name)]
@@ -201,6 +256,38 @@ class KITTI3DDataset(Dataset):
             datum.update({"raw_kitti_annotations": raw_kitti_annotations})
 
         return {sensor_name: datum}
+
+    def get_mapping_index(self, sample_id):
+        train_rand = pd.read_csv(
+            os.path.join(
+                self.root_dir, "mapping", "train_rand.txt"
+            ),
+            sep=',',
+            header=None
+        ).values.tolist()
+
+        raw_index = train_rand[0][int(sample_id)]
+
+        train_mapping = pd.read_csv(
+            os.path.join(
+                self.root_dir, "mapping", "train_mapping.txt"
+            ),
+            sep='\n',
+            header=None
+        ).values.tolist()
+
+        raw_drive_name = train_mapping[raw_index - 1][0][11:-11]
+        raw_frame_index = int(train_mapping[raw_index - 1][0][-10:])
+
+        whole_pose = pd.read_csv(
+            os.path.join(
+                self.root_dir, "mapping", "pose", "{}".format(raw_drive_name), "pose.txt"
+            ),
+            sep=' ',
+            header=None
+
+        )
+        return whole_pose, raw_frame_index
 
     def get_annotations(self, sample_id, sensor_name):
         try:
@@ -279,9 +366,10 @@ class KITTI3DDataset(Dataset):
 
 
 class KITTI3DMonocularDataset(Dataset):
-    def __init__(self, root_dir, mv3d_split, class_names, sensors, box2d_from_box3d, max_num_items):
-        self._kitti_dset = KITTI3DDataset(root_dir, mv3d_split, class_names, sensors, box2d_from_box3d, max_num_items)
+    def __init__(self, root_dir, mv3d_split, class_names, sensors, prev, prediction, box2d_from_box3d, max_num_items):
+        self._kitti_dset = KITTI3DDataset(root_dir, mv3d_split, class_names, sensors, prev, prediction, box2d_from_box3d, max_num_items)
         self._sensors = sensors
+        self._prev = prev
 
     def __len__(self):
         return len(self._kitti_dset) * len(self._sensors)
@@ -293,9 +381,9 @@ class KITTI3DMonocularDataset(Dataset):
 
 @functools.lru_cache(maxsize=1000)
 def build_monocular_kitti3d_dataset(
-    mv3d_split, root_dir, class_names=VALID_CLASS_NAMES, sensors=('camera_2', ), box2d_from_box3d=False, max_num_items=None
+    mv3d_split, root_dir, class_names=VALID_CLASS_NAMES, sensors=('camera_2',), prev=True, prediction=True, box2d_from_box3d=False, max_num_items=None
 ):
-    dataset = KITTI3DMonocularDataset(root_dir, mv3d_split, class_names, sensors, box2d_from_box3d, max_num_items)
+    dataset = KITTI3DMonocularDataset(root_dir, mv3d_split, class_names, sensors, prev, prediction, box2d_from_box3d, max_num_items)
     dataset_dicts = collect_dataset_dicts(dataset)
     return dataset_dicts
 

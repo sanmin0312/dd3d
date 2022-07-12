@@ -2,12 +2,17 @@ PROJECT = dd3d
 WORKSPACE = /workspace/$(PROJECT)
 DOCKER_IMAGE = $(PROJECT):latest
 DOCKERFILE ?= Dockerfile
+PWD = /home/user/data/SanminKim/dd3d
 
 DOCKER_OPTS = \
 	-it \
 	--rm \
 	-e DISPLAY=${DISPLAY} \
-	-v /data:/data \
+	-v ${PWD}/data:$(workspace)/workspace/dd3d/data \
+	-v ${PWD}/pretrained:$(workspace)/workspace/dd3d/pretrained \
+	-v ${PWD}/scripts:$(workspace)/workspace/dd3d/scripts \
+	-v ${PWD}/configs:$(workspace)/workspace/dd3d/configs \
+    -v ${PWD}/tridet:$(workspace)/workspace/dd3d/tridet \
 	-v /tmp:/tmp \
 	-v /tmp/.X11-unix:/tmp/.X11-unix \
 	-v /mnt/fsx:/mnt/fsx \
@@ -66,14 +71,14 @@ dist-run:
 		${DOCKER_IMAGE} \
 		${COMMAND}
 
-docker-run: docker-build
+docker-run:
 	nvidia-docker run --name $(PROJECT) --rm \
 		${DOCKER_OPTS} \
 		${DOCKER_IMAGE} \
 		${COMMAND}
 
-docker-run-mpi: docker-build
-	nvidia-docker run ${DOCKER_OPTS} -v $(PWD)/outputs:$(WORKSPACE)/outputs ${DOCKER_IMAGE} \
+docker-run-mpi:
+	nvidia-docker run ${DOCKER_OPTS} -v $(PWD)/outputs:$(workspace)/workspace/dd3d/outputs ${DOCKER_IMAGE} \
 		bash -c "${MPI_CMD} ${COMMAND}"
 
 clean:

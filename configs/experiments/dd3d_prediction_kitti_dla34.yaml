@@ -1,17 +1,16 @@
 # @package _global_
 defaults:
   - /evaluators/kitti_3d@EVALUATORS.KITTI3D
-  - override /meta_arch: dd3d
+  - override /meta_arch: dd3d_prediction
   - override /train_datasets@DATASETS.TRAIN: kitti_3d
   - override /test_datasets@DATASETS.TEST: kitti_3d
-  - override /feature_extractors@FE: v2_99_fpn
+  - override /feature_extractors@FE: dla34_fpn
 
 MODEL:
   # from-coco, IODA-pretrained.
-#  CKPT: https://tri-ml-public.s3.amazonaws.com/github/dd3d/pretrained/depth_pretrained_v99-3jlw0p36-20210423_010520-model_final-remapped.pth
-#  CKPT: ./pretrained/depth_pretrained_v99-3jlw0p36-20210423_010520-model_final-remapped.pth
-  CKPT: ./pretrained/DD3D_v99_model_final.pth
-
+#  CKPT: https://tri-ml-public.s3.amazonaws.com/github/dd3d/pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
+  CKPT: ./pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
+#  CKPT: ./pretrained/model_0021999.pth
 
 
 FE:
@@ -34,25 +33,30 @@ INPUT:
   RESIZE:
     # KITTI images are (370, 1224)
     MIN_SIZE_TRAIN: [288, 304, 320, 336, 352, 368, 384, 400, 416, 448, 480, 512, 544, 576]
+#    MIN_SIZE_TRAIN: [384]
     MAX_SIZE_TRAIN: 10000
     MIN_SIZE_TEST: 384
     MAX_SIZE_TEST: 100000
 
 SOLVER:
-  IMS_PER_BATCH: 4 # need at least 256 GPU mem (with fp16).
-  BASE_LR: 0.002
+  IMS_PER_BATCH: 8 # need at least 128 GPU mem (with fp16).
+  BASE_LR: 0.001
   MAX_ITER: 25000
   STEPS: [21500, 24000]
-  WARMUP_ITERS: 2000  # ~35 epochs
+#  MAX_ITER: 50000
+#  STEPS: [ 43000, 48000 ]
+  WARMUP_ITERS: 2000
   MIXED_PRECISION_ENABLED: False
   CHECKPOINT_PERIOD: 2000
 
 TEST:
-  IMS_PER_BATCH: 8
+  IMS_PER_BATCH: 16
   EVAL_PERIOD: 2000
   AUG:
     ENABLED: True
     MIN_SIZES: [320, 384, 448, 512, 576]
+#    MIN_SIZES: [ 320, 384, 448]
+
     MAX_SIZE: 100000
     FLIP: True
 
@@ -63,4 +67,16 @@ DATALOADER:
     REPEAT_THRESHOLD: 0.4
 
 WANDB:
-  TAGS: [kitti-val, v2-99, bn]
+  TAGS: [kitti-val, dla34, bn]
+
+
+DEFORMABLETRASFORMER:
+  D_MODEL: 256
+  N_HEAD: 4
+  NUM_ENC_LAYERS: 3
+  DIM_FFW: 1024
+  DROPOUT: 0.1
+  ACTIVATION: 'relu'
+  NUM_FEAT_LEVELS: 5
+  NUM_ENC_POINTS: 4
+

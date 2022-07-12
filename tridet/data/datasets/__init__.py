@@ -24,7 +24,7 @@ def register_datasets(cfg):
     return dataset_names
 
 
-def random_sample_dataset_dicts(dataset_name, num_samples=10):
+def random_sample_dataset_dicts(dataset_name, num_samples=400):
     dataset_dicts = DatasetCatalog.get(dataset_name)
     num_samples = min(num_samples, len(dataset_dicts))
     random.seed(42)

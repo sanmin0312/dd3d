@@ -6,6 +6,9 @@ from typing import List, Union
 
 import numpy as np
 import torch
+import cv2
+import os
+import copy
 
 from detectron2.config import configurable
 from detectron2.data import detection_utils as d2_utils
@@ -125,6 +128,78 @@ class DefaultDatasetMapper:
         # but not efficient on large generic data structures due to the use of pickle & mp.Queue.
         # Therefore it's important to use torch.Tensor.
         dataset_dict["image"] = torch.as_tensor(np.ascontiguousarray(image.transpose(2, 0, 1)))
+
+        if not 'sample_token' in dataset_dict:
+            depth_gt = cv2.imread(dataset_dict['current_depth_file_name'], cv2.IMREAD_ANYDEPTH)
+            depth_gt = (depth_gt / 256.).astype(np.float32)
+            depth_gt = transforms.apply_depth(depth_gt)
+            depth_gt = torch.as_tensor(depth_gt)
+            dataset_dict["depth_c"] = depth_gt
+
+        # if "past_depth_file_name" in dataset_dict and os.path.isfile(dataset_dict["past_depth_file_name"]):
+        #     depth_gt_p = cv2.imread(dataset_dict['past_depth_file_name'], cv2.IMREAD_ANYDEPTH)
+        #     depth_gt_p = (depth_gt_p / 256.).astype(np.float32)
+        #     depth_gt_p = transforms.apply_depth(depth_gt_p)
+        #     dataset_dict["depth_p"] = torch.as_tensor(depth_gt_p)
+        #
+        # else:
+        #     dataset_dict["depth_p"] = depth_gt.clone()
+        #
+        # if "future_depth_file_name" in dataset_dict and os.path.isfile(dataset_dict["future_depth_file_name"]):
+        #     # future depth
+        #     depth_gt_f = cv2.imread(dataset_dict['future_depth_file_name'], cv2.IMREAD_ANYDEPTH)
+        #     depth_gt_f = (depth_gt_f / 256.).astype(np.float32)
+        #     depth_gt_f = transforms.apply_depth(depth_gt_f)
+        #     dataset_dict["depth_f"] = torch.as_tensor(depth_gt_f)
+        #
+        # else:
+        #     dataset_dict["depth_f"] = depth_gt.clone()
+
+
+        #prediction
+        if "t1_file_name" in dataset_dict and os.path.isfile(dataset_dict["t1_file_name"]) and "t2_file_name" in dataset_dict and os.path.isfile(dataset_dict["t2_file_name"]):
+            image_t1 = d2_utils.read_image(dataset_dict['t1_file_name'], format=self.image_format)
+            d2_utils.check_image_size(dataset_dict, image_t1)
+
+            image_t1 = transforms.apply_image(image_t1)
+            dataset_dict["image_t1"] = torch.as_tensor(np.ascontiguousarray(image_t1.transpose(2, 0, 1)))
+
+            image_t2 = d2_utils.read_image(dataset_dict['t2_file_name'], format=self.image_format)
+            d2_utils.check_image_size(dataset_dict, image_t2)
+
+            image_t2 = transforms.apply_image(image_t2)
+            dataset_dict["image_t2"] = torch.as_tensor(np.ascontiguousarray(image_t2.transpose(2, 0, 1)))
+
+            #depth
+            if "past_depth_file_name" in dataset_dict and os.path.isfile(dataset_dict["past_depth_file_name"]):
+                depth_gt_p = cv2.imread(dataset_dict['past_depth_file_name'], cv2.IMREAD_ANYDEPTH)
+                depth_gt_p = (depth_gt_p / 256.).astype(np.float32)
+                depth_gt_p = transforms.apply_depth(depth_gt_p)
+                dataset_dict["depth_p"] = torch.as_tensor(depth_gt_p)
+            else:
+                dataset_dict["depth_p"] = depth_gt.clone()
+
+
+            if "future_depth_file_name" in dataset_dict and os.path.isfile(dataset_dict["future_depth_file_name"]):
+                # future depth
+                depth_gt_f = cv2.imread(dataset_dict['future_depth_file_name'], cv2.IMREAD_ANYDEPTH)
+                depth_gt_f = (depth_gt_f / 256.).astype(np.float32)
+                depth_gt_f = transforms.apply_depth(depth_gt_f)
+                dataset_dict["depth_f"] = torch.as_tensor(depth_gt_f)
+            else:
+                dataset_dict["depth_f"] = depth_gt.clone()
+
+
+        else:
+            dataset_dict["image_t1"] = dataset_dict["image"].clone()
+            dataset_dict["image_t2"] = dataset_dict["image"].clone()
+
+            #depth
+            dataset_dict["depth_p"] = depth_gt.clone()
+            dataset_dict["depth_f"] = depth_gt.clone()
+
+
+
         if semseg2d_gt is not None:
             dataset_dict["semseg2d"] = torch.as_tensor(semseg2d_gt.astype("long"))
 
@@ -137,10 +212,12 @@ class DefaultDatasetMapper:
         # If you add other transformations, then consider if they have to support intrinsics, 3D bbox, depth. etc.
         # See crop_transform.py, resize_transform.py, flip_transform.py for examples.
 
-        if "depth_file_name" in dataset_dict:
-            depth_gt = np.load(dataset_dict.pop("depth_file_name"))['data']
-            depth_gt = transforms.apply_depth(depth_gt)
-            dataset_dict["depth"] = torch.as_tensor(depth_gt)
+        # # current depth
+        # if "current_depth_file_name" in dataset_dict:
+        #     depth_gt = cv2.imread(dataset_dict['current_depth_file_name'], cv2.IMREAD_ANYDEPTH)
+        #     depth_gt = (depth_gt / 256.).astype(np.float32)
+        #     depth_gt = transforms.apply_depth(depth_gt)
+        #     dataset_dict["depth_c"] = torch.as_tensor(depth_gt)
 
         intrinsics = None
         if "intrinsics" in dataset_dict:
@@ -156,6 +233,21 @@ class DefaultDatasetMapper:
             pose = Pose(wxyz=np.float32(dataset_dict["pose"]["wxyz"]), tvec=np.float32(dataset_dict["pose"]["tvec"]))
             dataset_dict["pose"] = pose
             # NOTE: no transforms affect global pose.
+
+        if "ego_pose" in dataset_dict:
+            ego_poses = []
+            for ego_pose in dataset_dict["ego_pose"]:
+                ego_pose = np.concatenate((ego_pose, [0, 0, 0, 1]))
+                ego_pose = np.float32(ego_pose.reshape(4,4))
+                ego_pose = Pose.from_matrix(ego_pose)
+                ego_poses.append(ego_pose)
+
+            wxyz = ego_poses[1].rotation / ego_poses[0].rotation
+            tvec = ego_poses[1].tvec - ego_poses[0].tvec
+            ego_poses = Pose(wxyz=wxyz, tvec=tvec)
+            ego_poses = np.concatenate((ego_poses.rotation.normalised.elements, ego_poses.tvec), 0)
+            ego_poses = transforms.apply_egopose(ego_poses)
+            dataset_dict["ego_pose"] = ego_poses
 
         if "extrinsics" in dataset_dict:
             extrinsics = Pose(
