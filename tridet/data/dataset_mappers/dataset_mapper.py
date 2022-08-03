@@ -170,35 +170,20 @@ class DefaultDatasetMapper:
             image_t2 = transforms.apply_image(image_t2)
             dataset_dict["image_t2"] = torch.as_tensor(np.ascontiguousarray(image_t2.transpose(2, 0, 1)))
 
-            #depth
-            if "past_depth_file_name" in dataset_dict and os.path.isfile(dataset_dict["past_depth_file_name"]):
-                depth_gt_p = cv2.imread(dataset_dict['past_depth_file_name'], cv2.IMREAD_ANYDEPTH)
-                depth_gt_p = (depth_gt_p / 256.).astype(np.float32)
-                depth_gt_p = transforms.apply_depth(depth_gt_p)
-                dataset_dict["depth_p"] = torch.as_tensor(depth_gt_p)
-            else:
-                dataset_dict["depth_p"] = depth_gt.clone()
-
-
-            if "future_depth_file_name" in dataset_dict and os.path.isfile(dataset_dict["future_depth_file_name"]):
-                # future depth
-                depth_gt_f = cv2.imread(dataset_dict['future_depth_file_name'], cv2.IMREAD_ANYDEPTH)
-                depth_gt_f = (depth_gt_f / 256.).astype(np.float32)
-                depth_gt_f = transforms.apply_depth(depth_gt_f)
-                dataset_dict["depth_f"] = torch.as_tensor(depth_gt_f)
-            else:
-                dataset_dict["depth_f"] = depth_gt.clone()
-
+            # if "future_depth_file_name" in dataset_dict and os.path.isfile(dataset_dict["future_depth_file_name"]):
+            #     # future depth
+            #     depth_gt_f = cv2.imread(dataset_dict['future_depth_file_name'], cv2.IMREAD_ANYDEPTH)
+            #     depth_gt_f = (depth_gt_f / 256.).astype(np.float32)
+            #     depth_gt_f = transforms.apply_depth(depth_gt_f)
+            #     dataset_dict["depth_f"] = torch.as_tensor(depth_gt_f)
+            #
+            # else:
+            #     dataset_dict["depth_f"] = depth_gt.clone()
 
         else:
             dataset_dict["image_t1"] = dataset_dict["image"].clone()
             dataset_dict["image_t2"] = dataset_dict["image"].clone()
-
-            #depth
-            dataset_dict["depth_p"] = depth_gt.clone()
-            dataset_dict["depth_f"] = depth_gt.clone()
-
-
+            # dataset_dict["depth_f"] = depth_gt.clone()
 
         if semseg2d_gt is not None:
             dataset_dict["semseg2d"] = torch.as_tensor(semseg2d_gt.astype("long"))

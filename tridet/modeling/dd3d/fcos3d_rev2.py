@@ -144,19 +144,6 @@ class FCOS3DHead(nn.Module):
             for _ in range(num_levels)
         ])
 
-        if self.depth_on:
-            if self.prediction_on:
-                self.dense_depth = nn.ModuleList([
-                    Conv2d(in_channels, 1, kernel_size=3, stride=1, padding=1, bias=(not self.use_scale))
-                    for _ in range(self.num_levels)
-                ])
-
-            else:
-                self.dense_depth = nn.ModuleList([
-                    Conv2d(in_channels, 1, kernel_size=3, stride=1, padding=1, bias=(not self.use_scale))
-                    for _ in range(self.num_levels)
-                ])
-
         if self.video_on:
             self.pose = nn.ModuleList([
                 Conv2d(in_channels, 7, kernel_size=3, stride=1, padding=1, bias=(not self.use_scale))
@@ -188,9 +175,6 @@ class FCOS3DHead(nn.Module):
 
         predictors = [self.box3d_quat, self.box3d_ctr, self.box3d_depth, self.box3d_size, self.box3d_conf]
 
-        if self.depth_on:
-            predictors.append(self.dense_depth)
-
         if self.video_on:
             predictors.append(self.pose)
 
@@ -202,9 +186,7 @@ class FCOS3DHead(nn.Module):
                         torch.nn.init.constant_(l.bias, 0)
 
     def forward(self, x, inv_intrinsics=None):
-        box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf, dense_depth, ego_pose = [], [], [], [], [], [], []
-        if not self.depth_on:
-            dense_depth = None
+        box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf, ego_pose = [], [], [], [], [], []
 
         if not self.video_on:
             ego_pose = None
@@ -221,9 +203,6 @@ class FCOS3DHead(nn.Module):
             size3d = self.box3d_size[_l](box3d_tower_out)
             conf3d = self.box3d_conf[_l](box3d_tower_out)
 
-            if self.depth_on:
-                dense_depth_lvl = self.dense_depth[_l](box3d_tower_out)
-
             if self.video_on:
                 pose = self.pose[_l](box3d_tower_out)
 
@@ -234,8 +213,6 @@ class FCOS3DHead(nn.Module):
                 conf3d = self.scales_conf[l](conf3d)
                 depth = self.offsets_depth[l](self.scales_depth[l](depth))
 
-                if self.depth_on:
-                    dense_depth_lvl = self.offsets_depth[l](self.scales_depth[l](dense_depth_lvl))
 
             box3d_quat.append(quat)
             box3d_ctr.append(proj_ctr)
@@ -243,27 +220,24 @@ class FCOS3DHead(nn.Module):
             box3d_size.append(size3d)
             box3d_conf.append(conf3d)
 
-            if self.depth_on:
-                dense_depth.append(dense_depth_lvl)
 
             if self.video_on:
                 ego_pose.append(pose.mean(dim=(2, 3)))
 
-        if self.depth_on:
 
-            # Upsample.
-            dense_depth = [
-                aligned_bilinear(x, factor=stride, offset=self.feature_locations_offset).squeeze(1)
-                for x, stride in zip(dense_depth, self.in_strides)
-            ]
+        # Upsample.
+        dense_depth = [
+            aligned_bilinear(x, factor=stride, offset=self.feature_locations_offset).squeeze(1)
+            for x, stride in zip(box3d_depth, self.in_strides)
+        ]
 
-            if self.scale_depth_by_focal_lengths:
-                assert inv_intrinsics is not None
-                pixel_size = torch.norm(torch.stack([inv_intrinsics[:, 0, 0], inv_intrinsics[:, 1, 1]], dim=-1), dim=-1)
-                scaled_pixel_size = (pixel_size * self.scale_depth_by_focal_lengths_factor).reshape(-1, 1, 1)
-                dense_depth = [x / scaled_pixel_size for x in dense_depth]
+        if self.scale_depth_by_focal_lengths:
+            assert inv_intrinsics is not None
+            pixel_size = torch.norm(torch.stack([inv_intrinsics[:, 0, 0], inv_intrinsics[:, 1, 1]], dim=-1), dim=-1)
+            scaled_pixel_size = (pixel_size * self.scale_depth_by_focal_lengths_factor).reshape(-1, 1, 1)
+            dense_depth = [x / scaled_pixel_size for x in dense_depth]
 
-            # dense_depth = [x.clamp(max=80.0) for x in dense_depth]
+        # dense_depth = [x.clamp(max=80.0) for x in dense_depth]
 
         return box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf, dense_depth, ego_pose
 

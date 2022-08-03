@@ -11,7 +11,7 @@ from detectron2.structures import Instances
 from detectron2.utils import comm as d2_comm
 
 from tridet.data.datasets.nuscenes.build import MAX_NUM_ATTRIBUTES
-from tridet.modeling.dd3d.core import DD3D, DD3D_VIDEO_PREDICTION4
+from tridet.modeling.dd3d.core import DD3D, DD3D_VIDEO_NUSC
 from tridet.modeling.dd3d.postprocessing import get_group_idxs, nuscenes_sample_aggregate
 from tridet.modeling.dd3d.prepare_targets import DD3DTargetPreparer
 from tridet.structures.boxes3d import Boxes3D
@@ -362,7 +362,7 @@ class NuscenesDD3D(DD3D):
         locations = self.compute_locations(features)
         logits, box2d_reg, centerness, fcos2d_extra_output = self.fcos2d_head(features)
         if not self.only_box2d:
-            box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf, dense_depth = self.fcos3d_head(features)
+            box3d_quat, box3d_ctr, box3d_depth, box3d_size, box3d_conf, dense_depth, _ = self.fcos3d_head(features)
         inv_intrinsics = images.intrinsics.inverse() if images.intrinsics is not None else None
 
         # --------------------------------------------------------------------------
@@ -470,7 +470,7 @@ class NuscenesDD3D(DD3D):
 
 
 @META_ARCH_REGISTRY.register()
-class NuscenesDD3D_PREDICTION(DD3D_VIDEO_PREDICTION4):
+class NuscenesDD3D_PREDICTION(DD3D_VIDEO_NUSC):
     def __init__(self, cfg):
         super().__init__(cfg)
 

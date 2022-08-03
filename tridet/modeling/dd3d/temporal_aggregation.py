@@ -53,6 +53,46 @@ class TemporalWeight(nn.Module):
         return out
 
 
+class TemporalConv(nn.Module):
+    def __init__(self, cfg, input_shape):
+        super().__init__()
+
+        self.use_per_level_predictors = cfg.DD3D.FCOS3D.PER_LEVEL_PREDICTORS
+
+        self.in_strides = [shape.stride for shape in input_shape]
+        self.num_levels = len(input_shape)
+        in_channels = [s.channels for s in input_shape]
+        assert len(set(in_channels)) == 1, "Each level must have the same channel!"
+        in_channels = in_channels[0]
+        num_levels = self.num_levels if cfg.DD3D.FCOS3D.PER_LEVEL_PREDICTORS else 1
+
+        self.temporal_conv = nn.ModuleList([
+            Conv2d(in_channels*2, in_channels, kernel_size=3, stride=1, padding=1, bias=True)
+            for _ in range(num_levels)
+        ])
+
+        self.relu = nn.ReLU()
+        self._init_weights()
+
+    def _init_weights(self):
+
+        for l in self.temporal_conv.modules():
+            if isinstance(l, nn.Conv2d):
+                torch.nn.init.kaiming_uniform_(l.weight, a=1)
+                if l.bias is not None:  # depth head may not have bias.
+                    torch.nn.init.constant_(l.bias, 0)
+
+    def forward(self, cur, prev):
+        out = []
+
+        for l, (feat_cur, feat_prev) in enumerate(zip(cur, prev)):
+            _l = l if self.use_per_level_predictors else 0
+
+            out.append(self.temporal_conv[_l](torch.cat((feat_cur,feat_prev), dim=1)))
+
+        return out
+
+
 # class PositionalEncoding(nn.Module):
 #
 #     def __init__(self, d_model:int, max_len: int = 300, dropout = 0.0):

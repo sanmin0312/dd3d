@@ -13,12 +13,11 @@ KITTI_ROOT = 'kitti_3d'
 
 DATASET_DICTS_BUILDER = {
     # Monocular datasets
-    "kitti_3d_train": (build_monocular_kitti3d_dataset, dict(mv3d_split='train')),
+    "kitti_3d_train": (build_monocular_kitti3d_dataset, dict(mv3d_split='train', max_num_items=32)),
     "kitti_3d_train_project_box3d": (build_monocular_kitti3d_dataset, dict(mv3d_split='train', box2d_from_box3d=True)),
     "kitti_3d_train_right_cam": (build_monocular_kitti3d_dataset, dict(mv3d_split='train', sensors=('camera_3', ))),
-    "kitti_3d_train_both_cams":
-    (build_monocular_kitti3d_dataset, dict(mv3d_split='train', sensors=('camera_2', 'camera_3'))),
-    "kitti_3d_val": (build_monocular_kitti3d_dataset, dict(mv3d_split='val')),
+    "kitti_3d_train_both_cams": (build_monocular_kitti3d_dataset, dict(mv3d_split='train', sensors=('camera_2', 'camera_3'))),
+    "kitti_3d_val": (build_monocular_kitti3d_dataset, dict(mv3d_split='val', max_num_items=32)),
     "kitti_3d_trainval": (build_monocular_kitti3d_dataset, dict(mv3d_split='trainval')),
     "kitti_3d_test": (build_monocular_kitti3d_dataset, dict(mv3d_split='test')),
     "kitti_3d_overfit": (build_monocular_kitti3d_dataset, dict(mv3d_split='train', max_num_items=32)),

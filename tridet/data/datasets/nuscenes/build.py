@@ -302,17 +302,17 @@ class NuscenesDataset(Dataset):
         )
 
         # t-1 image
-        if sample_idx > 1:
-            t1_token = self.nusc.get('sample', datum['sample_token'])['prev']
-
-            t1_sample = self.nusc.get('sample', t1_token)['data'][datum_name]
-            filename, _, _ = self.nusc.get_sample_data(t1_sample)
-            d2_dict['t1_file_name'] = filename
-
-            t2_token = self.nusc.get('sample', t1_token)['prev']
-            t2_sample = self.nusc.get('sample', t2_token)['data'][datum_name]
-            filename, _, _ = self.nusc.get_sample_data(t2_sample)
-            d2_dict['t2_file_name'] = filename
+        # if sample_idx > 1:
+        #     t1_token = self.nusc.get('sample', datum['sample_token'])['prev']
+        #
+        #     t1_sample = self.nusc.get('sample', t1_token)['data'][datum_name]
+        #     filename, _, _ = self.nusc.get_sample_data(t1_sample)
+        #     d2_dict['t1_file_name'] = filename
+        #
+        #     t2_token = self.nusc.get('sample', t1_token)['prev']
+        #     t2_sample = self.nusc.get('sample', t2_token)['data'][datum_name]
+        #     filename, _, _ = self.nusc.get_sample_data(t2_sample)
+        #     d2_dict['t2_file_name'] = filename
 
         # Intrinsics
         d2_dict['intrinsics'] = list(K.flatten())

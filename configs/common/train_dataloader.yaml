@@ -1,5 +1,5 @@
 # Number of data loading threads
-NUM_WORKERS: 4
+NUM_WORKERS: 12
 
 FILTER_EMPTY_ANNOTATIONS: True
 
