@@ -991,8 +991,8 @@ class DD3D_VIDEO_PREDICTION3(nn.Module):
             self.temporal_head = DeformableTransformer(cfg)
 
             #temporal embedding
-            self.temporal_embedding = nn.Parameter(torch.tensor(3, int(cfg.FE.FPN.OUT_CHANNELS)))
-            self.level_embedding = nn.Parameter(torch.tensor(5, int(cfg.FE.FPN.OUT_CHANNELS)))
+            self.temporal_embedding = nn.Parameter(torch.Tensor(3, int(cfg.FE.FPN.OUT_CHANNELS)))
+            self.level_embedding = nn.Parameter(torch.Tensor(5, int(cfg.FE.FPN.OUT_CHANNELS)))
             self.positional_encoder = PositionEmbeddingLearned(int(cfg.FE.FPN.OUT_CHANNELS))
 
 
@@ -1065,8 +1065,8 @@ class DD3D_VIDEO_PREDICTION3(nn.Module):
 
             pos_embed = self.positional_encoder(feat_cur)
 
-            # embed_cur = pos_embed + self.temporal_embedding(torch.LongTensor([1]).to(feat_cur.device))[:, :, None, None] + self.level_embedding(torch.LongTensor([i+1]).to(feat_cur.device))[:, :, None, None]
-            # embed_prev = pos_embed.unsqueeze(0) + self.temporal_embedding(torch.LongTensor([2,3]).to(feat_cur.device))[:, None, :, None, None] + self.level_embedding(torch.LongTensor([i+1]).to(feat_cur.device))[:,None, :, None, None]
+            embed_cur = pos_embed + self.temporal_embedding[0][None, :, None, None] + self.level_embedding[i][None, :, None, None]
+            embed_prev = pos_embed[None, :] + self.temporal_embedding[1:][:, None, :, None, None] + self.level_embedding[i][None, None, :, None, None]
 
             features_cur.append(feat_cur+embed_cur)
             features_prev.append(feat_prev.transpose(0,1)+embed_prev)
