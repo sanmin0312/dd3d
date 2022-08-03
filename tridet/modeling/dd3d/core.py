@@ -19,7 +19,7 @@ from tridet.modeling.feature_extractor import build_feature_extractor
 from tridet.structures.image_list import ImageList
 from tridet.utils.tensor2d import compute_features_locations as compute_locations_per_level
 from tridet.modeling.dd3d.pose_estimation import PoseLoss
-from tridet.modeling.dd3d.temporal_aggregation import TemporalWeight, TemporalConv
+from tridet.modeling.dd3d.temporal_aggregation import TemporalWeight
 from tridet.modeling.dd3d.dense_depth_loss import build_dense_depth_loss
 
 from DeformableDETR.models.deformable_transformer import DeformableTransformer
@@ -991,7 +991,9 @@ class DD3D_VIDEO_PREDICTION3(nn.Module):
             self.temporal_head = DeformableTransformer(cfg)
 
             #temporal embedding
-            self.temporal_embedding = nn.Parameter(torch.Tensor(3))
+            self.temporal_embedding = nn.Parameter(torch.tensor(3, int(cfg.FE.FPN.OUT_CHANNELS)))
+            self.level_embedding = nn.Parameter(torch.tensor(5, int(cfg.FE.FPN.OUT_CHANNELS)))
+            self.positional_encoder = PositionEmbeddingLearned(int(cfg.FE.FPN.OUT_CHANNELS))
 
 
         if cfg.MODEL.DEPTH_ON:
@@ -1056,14 +1058,20 @@ class DD3D_VIDEO_PREDICTION3(nn.Module):
 
         features_prev, features_cur = [], []
 
-        for f in self.in_features:
-            feat_cur = features[f].reshape(3, batch_size, features[f].size(1), features[f].size(2), -1)[0] + self.temporal_embedding[0, None, None, None, None]
-            feat_prev = features[f].reshape(3, batch_size, features[f].size(1), features[f].size(2), -1)[1:] + self.temporal_embedding[1:, None, None, None, None]
+        for i,f in enumerate(self.in_features):
 
-            features_cur.append(feat_cur)
-            features_prev.append(feat_prev.transpose(0,1))
+            feat_cur = features[f].reshape(3, batch_size, features[f].size(1), features[f].size(2), -1)[0]
+            feat_prev = features[f].reshape(3, batch_size, features[f].size(1), features[f].size(2), -1)[1:]
 
-        # temporal aggregation
+            pos_embed = self.positional_encoder(feat_cur)
+
+            # embed_cur = pos_embed + self.temporal_embedding(torch.LongTensor([1]).to(feat_cur.device))[:, :, None, None] + self.level_embedding(torch.LongTensor([i+1]).to(feat_cur.device))[:, :, None, None]
+            # embed_prev = pos_embed.unsqueeze(0) + self.temporal_embedding(torch.LongTensor([2,3]).to(feat_cur.device))[:, None, :, None, None] + self.level_embedding(torch.LongTensor([i+1]).to(feat_cur.device))[:,None, :, None, None]
+
+            features_cur.append(feat_cur+embed_cur)
+            features_prev.append(feat_prev.transpose(0,1)+embed_prev)
+
+            # temporal aggregation
 
         features_prev = self.temporal_head(features_prev, masks=None, pos_embeds=None)
         features = [feat_cur + feat_prev for (feat_cur, feat_prev) in zip(features_cur, features_prev)]

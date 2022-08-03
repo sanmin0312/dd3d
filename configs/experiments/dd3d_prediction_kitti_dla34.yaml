@@ -9,7 +9,9 @@ defaults:
 MODEL:
   # from-coco, IODA-pretrained.
 #  CKPT: https://tri-ml-public.s3.amazonaws.com/github/dd3d/pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
+#  CKPT: data/SanminKim/dd3d/pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
   CKPT: ./pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
+
 #  CKPT: ./pretrained/model_0021999.pth
 
 
