@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 
 def main():
 
-    first = "2022-07-07"
-    second = "15-22-08"
+    first = "2022-08-04"
+    second = "16-24-12"
     third = "Results_20000_TTA rev"
 
 
     # data_dir = os.path.join(os.getcwd(), "outputs", date, model_name, "Result-tta", "inference", "final-tta", "kitti_3d_val")
-    data_dir = os.path.join(os.getcwd(), "outputs", first, second, "inference", "final", "kitti_3d_val")
+    data_dir = os.path.join(os.getcwd(), "outputs", first, second, "inference", "final-tta", "kitti_3d_val")
 
     vizfile = os.path.join(data_dir, "visualization.npz")
 
