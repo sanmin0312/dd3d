@@ -60,7 +60,7 @@ DDP_FIND_UNUSED_PARAMETERS: True
 
 # Run multiple batches of size IMS_PER_BATCH before doing a backward pass.
 # The effective batch size: IMS_PER_BATCH x ACCUMULATE_GRAD_BATCHES
-ACCUMULATE_GRAD_BATCHES: 8
+ACCUMULATE_GRAD_BATCHES: 1
 
 # If True, then SyncBN use only workers of the same machine to compute batch stats used in batchnorm.
 # If False, then SyncBN uses all workers across all machines.

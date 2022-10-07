@@ -36,7 +36,9 @@ from tridet.utils.train import get_inference_output_dir, print_test_results
 from tridet.utils.visualization import mosaic, save_vis
 from tridet.utils.wandb import flatten_dict, log_nested_dict
 from tridet.visualizers import get_dataloader_visualizer, get_predictions_visualizer
+import torch.multiprocessing
 
+torch.multiprocessing.set_sharing_strategy('file_system')
 LOG = logging.getLogger('tridet')
 os.environ["HYDRA_FULL_ERROR"] = '1'
 os.environ["CUDA_LAUNCH_BLOCKING"] = '1'

@@ -15,7 +15,7 @@ from detectron2.structures import Boxes, Instances
 from detectron2.utils.comm import get_world_size
 
 from tridet.layers import bev_nms
-from tridet.modeling.dd3d.core import DD3D, DD3D_VIDEO_PREDICTION8
+from tridet.modeling.dd3d.core import DD3D, P2D_FS2_1006
 from tridet.structures.boxes3d import Boxes3D
 
 __all__ = ["DatasetMapperTTA", "DD3DWithTTA", "DD3D_VIDEOWithTTA"]
@@ -282,7 +282,7 @@ class DD3D_VIDEOWithTTA(nn.Module):
         super().__init__()
         if isinstance(model, DistributedDataParallel):
             model = model.module
-        assert isinstance(model, DD3D_VIDEO_PREDICTION8), "DD3DwithTTA only supports on DD3D. Got a model of type {}".format(type(model))
+        assert isinstance(model, P2D_FS2_1006), "DD3DwithTTA only supports on DD3D. Got a model of type {}".format(type(model))
         assert not model.postprocess_in_inference, "To use test-time augmentation, `postprocess_in_inference` must be False."
         self.cfg = cfg.copy()
 

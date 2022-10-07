@@ -10,7 +10,7 @@ MODEL:
   # from-coco, IODA-pretrained.
 #  CKPT: https://tri-ml-public.s3.amazonaws.com/github/dd3d/pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
   CKPT: ./pretrained/depth_pretrained_dla34-y1urdmir-20210422_165446-model_final-remapped.pth
-#  CKPT: ./outputs/DD3D_VIDEO_DLA34_PREDICTION2_onlyPred/21-22-12/model_final.pth
+#  CKPT: ./pretrained/model_0016999.pth
 
 
 FE:
@@ -27,7 +27,7 @@ DD3D:
       NMS_THRESH: 0.75
 
   FCOS3D:
-    NORM: FrozenBN
+    NORM: BN
     NORM_PREDICTION: BN
 
 
@@ -41,7 +41,7 @@ INPUT:
     MAX_SIZE_TEST: 100000
 
 SOLVER:
-  IMS_PER_BATCH: 8 # need at least 128 GPU mem (with fp16).
+  IMS_PER_BATCH: 32 # need at least 128 GPU mem (with fp16).
   BASE_LR: 0.001
   MAX_ITER: 25000
   STEPS: [21500, 24000]
@@ -49,10 +49,10 @@ SOLVER:
 #  STEPS: [ 43000, 48000 ]
   WARMUP_ITERS: 2000
   MIXED_PRECISION_ENABLED: False
-  CHECKPOINT_PERIOD: 2000
+  CHECKPOINT_PERIOD: 1000
 
 TEST:
-  IMS_PER_BATCH: 16
+  IMS_PER_BATCH: 32
   EVAL_PERIOD: 1000
   AUG:
     ENABLED: True
@@ -64,7 +64,7 @@ TEST:
 
 DATALOADER:
   TRAIN:
-    NUM_WORKERS: 12
+    NUM_WORKERS: 48
     SAMPLER: RepeatFactorTrainingSampler
     REPEAT_THRESHOLD: 0.4
 

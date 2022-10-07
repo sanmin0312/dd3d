@@ -1,19 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="vdc86" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false" showAutoUploadSettingsWarning="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="dd3d_30" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false" showAutoUploadSettingsWarning="false">
     <option name="confirmBeforeUploading" value="false" />
     <serverData>
-      <paths name="vdc24">
+      <paths name="CF_NIPA">
         <serverdata>
           <mappings>
-            <mapping deploy="/data/SanminKim/dd3d" local="$PROJECT_DIR$" web="/" />
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
-      <paths name="vdc86">
+      <paths name="bevdepth30">
         <serverdata>
           <mappings>
-            <mapping deploy="/data/SanminKim/dd3d" local="$PROJECT_DIR$" web="/" />
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="bevdepth_86">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="dd3d_24">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/user/data/SanminKim/dd3d" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="dd3d_30">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/user/data/SanminKim/dd3d" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="dd3d_86">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/user/data/SanminKim/dd3d" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="ubuntu@211.188.81.90:16022 password">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

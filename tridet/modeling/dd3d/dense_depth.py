@@ -39,26 +39,26 @@ class DD3DDenseDepthHead(nn.Module):
         if use_deformable:
             raise ValueError("Not supported yet.")
 
-        # for i in range(num_convs):
-        #     if norm in ("BN", "FrozenBN"):
-        #         # Each FPN level has its own batchnorm layer.
-        #         # "BN" is converted to "SyncBN" in distributed training (see train.py)
-        #         norm_layer = ModuleListDial([get_norm(norm, in_channels) for _ in range(self.num_levels)])
-        #     else:
-        #         norm_layer = get_norm(norm, in_channels)
-        #     box3d_tower.append(
-        #         Conv2d(
-        #             in_channels,
-        #             in_channels,
-        #             kernel_size=3,
-        #             stride=1,
-        #             padding=1,
-        #             bias=norm_layer is None,
-        #             norm=norm_layer,
-        #             activation=F.relu
-        #         )
-        #     )
-        # self.add_module('box3d_tower', nn.Sequential(*box3d_tower))
+        for i in range(num_convs):
+            if norm in ("BN", "FrozenBN"):
+                # Each FPN level has its own batchnorm layer.
+                # "BN" is converted to "SyncBN" in distributed training (see train.py)
+                norm_layer = ModuleListDial([get_norm(norm, in_channels) for _ in range(self.num_levels)])
+            else:
+                norm_layer = get_norm(norm, in_channels)
+            box3d_tower.append(
+                Conv2d(
+                    in_channels,
+                    in_channels,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    bias=norm_layer is None,
+                    norm=norm_layer,
+                    activation=F.relu
+                )
+            )
+        self.add_module('box3d_tower', nn.Sequential(*box3d_tower))
 
         # Each FPN level has its own predictor layer.
         self.dense_depth = nn.ModuleList([
@@ -76,11 +76,11 @@ class DD3DDenseDepthHead(nn.Module):
 
     def _init_weights(self):
 
-        # for l in self.box3d_tower.modules():
-        #     if isinstance(l, nn.Conv2d):
-        #         torch.nn.init.kaiming_normal_(l.weight, mode='fan_out', nonlinearity='relu')
-        #         if l.bias is not None:
-        #             torch.nn.init.constant_(l.bias, 0)
+        for l in self.box3d_tower.modules():
+            if isinstance(l, nn.Conv2d):
+                torch.nn.init.kaiming_normal_(l.weight, mode='fan_out', nonlinearity='relu')
+                if l.bias is not None:
+                    torch.nn.init.constant_(l.bias, 0)
 
         for l in self.dense_depth.modules():
             if isinstance(l, nn.Conv2d):
@@ -173,45 +173,45 @@ class DD3DDenseDepthHead(nn.Module):
 #             raise NotImplementedError()
 
 
-@META_ARCH_REGISTRY.register()
-class DD3DDenseDepth(nn.Module):
-    def __init__(self, cfg, input_shape):
-        super().__init__()
-        self.in_features = cfg.DD3D.IN_FEATURES
-        self.feature_locations_offset = cfg.DD3D.FEATURE_LOCATIONS_OFFSET
-        self.in_strides = [shape.stride for shape in input_shape]
-
-        # self.fcos3d_head = DD3DDenseDepthHead(cfg, input_shape)
-
-        self.scale_depth_by_focal_lengths = cfg.DD3D.FCOS3D.SCALE_DEPTH_BY_FOCAL_LENGTHS
-        self.scale_depth_by_focal_lengths_factor = cfg.DD3D.FCOS3D.SCALE_DEPTH_BY_FOCAL_LENGTHS_FACTOR
-
-        self.register_buffer("pixel_mean", torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1))
-        self.register_buffer("pixel_std", torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1))
-
-    @property
-    def device(self):
-        return self.pixel_mean.device
-
-    def forward(self, dense_depth, intrinsics):
-
-        # dense_depth = self.fcos3d_head(x)
-
-        inv_intrinsics = intrinsics.inverse() if intrinsics is not None else None
-
-        # Upsample.
-        dense_depth = [
-            aligned_bilinear(x, factor=stride, offset=self.feature_locations_offset).squeeze(1)
-            for x, stride in zip(dense_depth, self.in_strides)
-        ]
-
-        if self.scale_depth_by_focal_lengths:
-            assert inv_intrinsics is not None
-            pixel_size = torch.norm(torch.stack([inv_intrinsics[:, 0, 0], inv_intrinsics[:, 1, 1]], dim=-1), dim=-1)
-            scaled_pixel_size = (pixel_size * self.scale_depth_by_focal_lengths_factor).reshape(-1, 1, 1, 1)
-            dense_depth = [x / scaled_pixel_size for x in dense_depth]
-
-        return dense_depth
+# @META_ARCH_REGISTRY.register()
+# class DD3DDenseDepth(nn.Module):
+#     def __init__(self, cfg, input_shape):
+#         super().__init__()
+#         self.in_features = cfg.DD3D.IN_FEATURES
+#         self.feature_locations_offset = cfg.DD3D.FEATURE_LOCATIONS_OFFSET
+#         self.in_strides = [shape.stride for shape in input_shape]
+#
+#         # self.fcos3d_head = DD3DDenseDepthHead(cfg, input_shape)
+#
+#         self.scale_depth_by_focal_lengths = cfg.DD3D.FCOS3D.SCALE_DEPTH_BY_FOCAL_LENGTHS
+#         self.scale_depth_by_focal_lengths_factor = cfg.DD3D.FCOS3D.SCALE_DEPTH_BY_FOCAL_LENGTHS_FACTOR
+#
+#         self.register_buffer("pixel_mean", torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1))
+#         self.register_buffer("pixel_std", torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1))
+#
+#     @property
+#     def device(self):
+#         return self.pixel_mean.device
+#
+#     def forward(self, dense_depth, intrinsics):
+#
+#         # dense_depth = self.fcos3d_head(x)
+#
+#         inv_intrinsics = intrinsics.inverse() if intrinsics is not None else None
+#
+#         # Upsample.
+#         dense_depth = [
+#             aligned_bilinear(x, factor=stride, offset=self.feature_locations_offset).squeeze(1)
+#             for x, stride in zip(dense_depth, self.in_strides)
+#         ]
+#
+#         if self.scale_depth_by_focal_lengths:
+#             assert inv_intrinsics is not None
+#             pixel_size = torch.norm(torch.stack([inv_intrinsics[:, 0, 0], inv_intrinsics[:, 1, 1]], dim=-1), dim=-1)
+#             scaled_pixel_size = (pixel_size * self.scale_depth_by_focal_lengths_factor).reshape(-1, 1, 1, 1)
+#             dense_depth = [x / scaled_pixel_size for x in dense_depth]
+#
+#         return dense_depth
 
 
 # @META_ARCH_REGISTRY.register()

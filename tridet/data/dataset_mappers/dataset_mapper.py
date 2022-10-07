@@ -234,6 +234,21 @@ class DefaultDatasetMapper:
             ego_poses = transforms.apply_egopose(ego_poses)
             dataset_dict["ego_pose"] = ego_poses
 
+        if "ego_pose_prev" in dataset_dict:
+            ego_pose_prev = []
+            for ego_pose in dataset_dict["ego_pose_prev"]:
+                ego_pose = np.concatenate((ego_pose, [0, 0, 0, 1]))
+                ego_pose = np.float32(ego_pose.reshape(4,4))
+                ego_pose = Pose.from_matrix(ego_pose)
+                ego_pose_prev.append(ego_pose)
+
+            wxyz = ego_pose_prev[1].rotation / ego_pose_prev[0].rotation
+            tvec = ego_pose_prev[1].tvec - ego_pose_prev[0].tvec
+            ego_pose_prev = Pose(wxyz=wxyz, tvec=tvec)
+            ego_pose_prev = np.concatenate((ego_pose_prev.rotation.normalised.elements, ego_pose_prev.tvec), 0)
+            ego_pose_prev = transforms.apply_egopose(ego_pose_prev)
+            dataset_dict["ego_pose_prev"] = ego_pose_prev
+
         if "extrinsics" in dataset_dict:
             extrinsics = Pose(
                 wxyz=np.float32(dataset_dict["extrinsics"]["wxyz"]),

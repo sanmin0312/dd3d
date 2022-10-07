@@ -9,7 +9,7 @@ INPUT:
 
 MODEL:
   DEVICE: cuda
-  META_ARCHITECTURE: DD3D_VIDEO_PREDICTION8
+  META_ARCHITECTURE: P2D_FS2_1006
 
   # Values to be used for image normalization (BGR order, since INPUT.FORMAT defaults to BGR).
   # To train on images of different number of channels, just set different mean & std.

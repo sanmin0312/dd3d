@@ -24,11 +24,11 @@ class TemporalWeight(nn.Module):
         num_levels = self.num_levels if cfg.DD3D.FCOS3D.PER_LEVEL_PREDICTORS else 1
 
         self.temporal_weight = nn.ModuleList([
-            Conv2d(in_channels*2, 2, kernel_size=3, stride=1, padding=1, bias=True)
+            Conv2d(in_channels*2, 1, kernel_size=3, stride=1, padding=1, bias=True)
             for _ in range(num_levels)
         ])
 
-        self.softmax = nn.Softmax(dim=1)
+        self.sigmoid = nn.Sigmoid()
         self._init_weights()
 
     def _init_weights(self):
@@ -40,17 +40,18 @@ class TemporalWeight(nn.Module):
                     torch.nn.init.constant_(l.bias, 0)
 
     def forward(self, cur, prev):
-        out = []
+        out, weights = [], []
 
         for l, (feat_cur, feat_prev) in enumerate(zip(cur, prev)):
             _l = l if self.use_per_level_predictors else 0
 
-            weight = self.temporal_weight[_l](torch.cat((feat_cur,feat_prev), dim=1))
-            weight = self.softmax(weight)
+            temp_weight = self.temporal_weight[_l](torch.cat((feat_cur,feat_prev), dim=1))
+            temp_weight = self.sigmoid(temp_weight)
 
-            out.append(feat_cur*weight[:,:1]+feat_prev*weight[:, 1:])
+            out.append(feat_cur*temp_weight+feat_prev*(1-temp_weight))
+            weights.append(temp_weight)
 
-        return out
+        return out, weights
 
 
 class TemporalConv(nn.Module):

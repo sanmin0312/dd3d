@@ -15,45 +15,44 @@ from detectron2.layers import Conv2d, get_norm
 LOG = logging.getLogger(__name__)
 
 
-class PoseHead(nn.Module):
-    #TODO pose haed activation 고민해 볼 것
-    #TODO PoseHead 위치 적절한지
-    def __init__(self, cfg, num_features):
-        super().__init__()
-        posehead = nn.Sequential(nn.Linear(cfg.ATTENTION.EMBED_DIM, 7), #yaw, x, y, z
-                                 )
-
-        self.posehead = _get_clones(posehead,num_features)
-
-    def forward(self, x):
-
-        for i, (x_level, posenet) in enumerate(zip(x, self.posehead)):
-            x[i] = posenet(x_level).type(torch.float32)
-
-        return x
-
-
-class PoseHead_single(nn.Module):
-    #TODO pose haed activation 고민해 볼 것
-    #TODO PoseHead 위치 적절한지
-    def __init__(self, cfg, num_features):
-        super().__init__()
-        self.posehead = nn.Sequential(nn.Linear(cfg.ATTENTION.EMBED_DIM, 7), #yaw, x, y, z
-                                 )
+# class PoseHead(nn.Module):
+#     #TODO pose haed activation 고민해 볼 것
+#     #TODO PoseHead 위치 적절한지
+#     def __init__(self, cfg, num_features):
+#         super().__init__()
+#         posehead = nn.Sequential(nn.Linear(cfg.ATTENTION.EMBED_DIM, 7), #yaw, x, y, z
+#                                  )
+#
+#         self.posehead = _get_clones(posehead,num_features)
+#
+#     def forward(self, x):
+#
+#         for i, (x_level, posenet) in enumerate(zip(x, self.posehead)):
+#             x[i] = posenet(x_level).type(torch.float32)
+#
+#         return x
 
 
-    def forward(self, x):
-
-        x = self.posehead(x).type(torch.float32)
-
-        return x
+# class PoseHead_single(nn.Module):
+#     #TODO pose haed activation 고민해 볼 것
+#     #TODO PoseHead 위치 적절한지
+#     def __init__(self, cfg, num_features):
+#         super().__init__()
+#         self.posehead = nn.Sequential(nn.Linear(cfg.ATTENTION.EMBED_DIM, 7), #yaw, x, y, z
+#                                  )
+#
+#
+#     def forward(self, x):
+#
+#         x = self.posehead(x).type(torch.float32)
+#
+#         return x
 
 
 class FCOSPoseHead(nn.Module):
     def __init__(self, cfg, input_shape):
         super().__init__()
 
-        self.num_classes = cfg.DD3D.NUM_CLASSES
         self.in_strides = [shape.stride for shape in input_shape]
         self.num_levels = len(input_shape)
 
@@ -63,12 +62,8 @@ class FCOSPoseHead(nn.Module):
         assert len(set(in_channels)) == 1, "Each level must have the same channel!"
         in_channels = in_channels[0]
 
-        num_pose_convs = cfg.DD3D.FCOS2D.NUM_CLS_CONVS
-        use_deformable = cfg.DD3D.FCOS2D.USE_DEFORMABLE
-        norm = cfg.DD3D.FCOS2D.NORM
-
-        if use_deformable:
-            raise ValueError("Not supported yet.")
+        num_pose_convs = 1
+        norm = "BN"
 
         head_configs = {'pose': num_pose_convs}
 
@@ -97,7 +92,7 @@ class FCOSPoseHead(nn.Module):
                         norm_layer = get_norm(norm, in_channels)
                     tower.append(
                         Conv2d(
-                            in_channels,
+                            in_channels*2,
                             in_channels,
                             kernel_size=3,
                             stride=1,
@@ -112,7 +107,7 @@ class FCOSPoseHead(nn.Module):
             self.add_module(f'{head_name}_tower', nn.Sequential(*tower))
 
         self.pose = nn.Conv2d(in_channels, 7, kernel_size=3, stride=1, padding=1)
-
+        self.pose_embed = nn.Linear(7, in_channels)
 
         self.init_weights()
 
@@ -135,13 +130,16 @@ class FCOSPoseHead(nn.Module):
                         torch.nn.init.constant_(l.bias, 0)
 
     def forward(self, x):
-        pose = []
+        pose, embeds = [], []
 
         for l, feature in enumerate(x):
             pose_tower_out = self.pose_tower(feature)
-            pose.append(self.pose(pose_tower_out).mean(dim=(2, 3)))
+            out = (self.pose(pose_tower_out)).mean(dim=(2, 3))
+            embed = self.pose_embed(out)
 
-        return pose
+            pose.append(out)
+            embeds.append(embed)
+        return pose, embeds
 
 
 class PoseLoss(nn.Module):

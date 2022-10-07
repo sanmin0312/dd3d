@@ -6,7 +6,7 @@ from tridet.modeling.dd3d import DD3DWithTTA, DD3D_VIDEOWithTTA, NuscenesDD3DWit
 TTA_MODELS = {
     "DD3D": DD3DWithTTA,
     "NuscenesDD3D": NuscenesDD3DWithTTA,
-    "DD3D_VIDEO_PREDICTION8": DD3D_VIDEOWithTTA,
+    "P2D_FS2_1006": DD3D_VIDEOWithTTA,
 }
 
 

@@ -9,8 +9,10 @@ defaults:
 MODEL:
   # from-coco, IODA-pretrained.
 #  CKPT: https://tri-ml-public.s3.amazonaws.com/github/dd3d/pretrained/depth_pretrained_v99-3jlw0p36-20210423_010520-model_final-remapped.pth
-#  CKPT: ./pretrained/depth_pretrained_v99-3jlw0p36-20210423_010520-model_final-remapped.pth
-  CKPT: ./pretrained/model_0021999.pth
+  CKPT: ./pretrained/depth_pretrained_v99-3jlw0p36-20210423_010520-model_final-remapped.pth
+#  CKPT: ./pretrained/model_0021999.pth
+#  CKPT: ./outputs/DD3D_V99_KITTI_PREDICTION4_final/12-02-36/model_final.pth
+
 
 
 
@@ -44,16 +46,16 @@ INPUT:
     MAX_SIZE_TEST: 100000
 
 SOLVER:
-  IMS_PER_BATCH: 4 # need at least 256 GPU mem (with fp16).
+  IMS_PER_BATCH: 32 # need at least 256 GPU mem (with fp16).
   BASE_LR: 0.002
   MAX_ITER: 25000
   STEPS: [21500, 24000]
   WARMUP_ITERS: 2000  # ~35 epochs
   MIXED_PRECISION_ENABLED: False
-  CHECKPOINT_PERIOD: 2000
+  CHECKPOINT_PERIOD: 1000
 
 TEST:
-  IMS_PER_BATCH: 4
+  IMS_PER_BATCH: 32
   EVAL_PERIOD: 1000
   AUG:
     ENABLED: True
