@@ -190,6 +190,10 @@ class DD3D(nn.Module):
         return locations
 
 
+"""
+1. Temporal Deformable Cross Attention
+2. 
+"""
 @META_ARCH_REGISTRY.register()
 class P2D(nn.Module):
     #TODO Positional Encoding for DeformAtt
